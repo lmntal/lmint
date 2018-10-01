@@ -22,9 +22,6 @@ class Functor {
         // cerr << "delete Functor" << endl;
     }
     Functor(int arity_, string name_): arity(arity_),name(name_) {}
-    
-    // NG
-    // operator pair<int, string>() const { return pair<int, string>{arity, name}; }
 
     bool operator==(const Functor r) const {
         return arity == r.arity && name == r.name;
@@ -43,11 +40,23 @@ const Functor B2 = {2, "b"};
 const Functor B0 = {0, "b"};
 const Functor FL = {0, ""}; 
 
+
+class Link {
+  public:
+    Atom *dst_atom;
+    int dst_pos;
+    Link(){}
+    Link(Atom *da, int dp): dst_atom(da), dst_pos(dp) {}
+    ~Link(){}
+};
+
 class Atom {
   public:
     Functor functor;
+
     vector<Atom*> link;
     vector<int> link_pos;
+
     list<Atom*>::iterator itr;
 
     Atom(){}
@@ -61,8 +70,8 @@ class Atom {
         link_pos = vector<int>(arity);
     }
     void add_to_atomlist(){
-        atomlist[functor].push_back(this);
-        itr = --(atomlist[functor].end());
+        atomlist[functor].push_front(this);
+        itr = atomlist[functor].begin();
     }
 
     // isSymbol
@@ -87,14 +96,8 @@ class Temp{
     // registerID(link_posでatomかfreelinkか振り分け)
 
     Temp(){}
-    Temp( Functor _functor, vector<Functor> _link_functor,
-          vector<int> _link_pos, vector<int> _link_reg){
-        functor = _functor;
-        link_functor = _link_functor;
-        link_pos = _link_pos;
-        link_reg = _link_reg;
-    }
-
+    Temp(Functor f, vector<Functor> lf, vector<int> lp, vector<int> lr):  
+        functor(f), link_functor(lf), link_pos(lp), link_reg(lr){}
 };
 
 class Guard{
@@ -358,7 +361,7 @@ void make_baaab_graph(int n){
     Atom *front = new Atom(B2);
     front->add_to_atomlist();
     Atom *pre = front;
-    for (int i = 0; i < n-1; i++) {
+    for (int i = 0; i < n; i++) {
         Atom *cur = new Atom(A2);
         cur->add_to_atomlist();
 
@@ -424,16 +427,16 @@ int main(void){
     // make_XabaaaaabaaaX_graph(4000);
     // rulelist = { make_aba_rule() };
 
-    // make_baaab_graph(50000);
-    // rulelist = { make_aa_to_a_rule() };
+    make_baaab_graph(50000);
+    rulelist = { make_aa_to_a_rule() };
 
-    make_many_a_graph(11);
-    rulelist = { make_a_a_none_rule() };
+    // make_many_a_graph(11);
+    // rulelist = { make_a_a_none_rule() };
+
     print(atomlist[A0].size());
     print(atomlist[B0].size());
-
-    // print(atomlist[A2].size());
-    // print(atomlist[B2].size());
+    print(atomlist[A2].size());
+    print(atomlist[B2].size());
 
     // execute rule
     while(true){
@@ -450,9 +453,8 @@ int main(void){
 
     print(atomlist[A0].size());
     print(atomlist[B0].size());
-
-    // print(atomlist[A2].size());
-    // print(atomlist[B2].size());
+    print(atomlist[A2].size());
+    print(atomlist[B2].size());
     
     return 0;
 }
