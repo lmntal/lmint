@@ -63,6 +63,7 @@ class Atom {
     Atom() {}
     ~Atom() {
         assert(*itr == this);
+        atomlist[functor].erase(itr);
     }
     Atom(Functor f): functor(f) {
         link.resize(functor.arity);
@@ -105,6 +106,16 @@ class Guard{
     vector<string> variable;
 };
 
+class Rule {
+  public:
+    int freelink_num;
+    vector<Temp> head;
+    vector<Guard> gurad;
+    vector<Temp> body;
+    Rule() {}
+    ~Rule() {}
+};
+
 // Matching 時に使う変数的役割
 class Register {
   public:
@@ -112,15 +123,16 @@ class Register {
     vector<Atom*> body;
     vector<Atom*> freelink;
     vector<int> freelink_pos;
+    Register() {}
+    ~Register() {}
+    Register(Rule &rule) {
+        head.resize(rule.head.size());
+        body.resize(rule.body.size());
+        freelink.resize(rule.freelink_num);
+        freelink_pos.resize(rule.freelink_num);
+    }
 };
 
-class Rule {
-  public:
-    int freelink_num;
-    vector<Temp> head;
-    vector<Guard> gurad;
-    vector<Temp> body;
-};
 
 // ----------------------------------------------------------------------
 
@@ -287,23 +299,18 @@ void commit(Rule &rule, Register &reg) {
     }
 
     // 4. headatomを消す
-    for (auto atom : reg.head) {
-        atomlist[atom->functor].erase(atom->itr);
+    for (auto &atom : reg.head) {
         delete atom;
     }
 
 }
 
-long long try_rule_cnt = 0;
+long long num_rules_success = 0;
 bool try_rule(Rule &rule) {
-    try_rule_cnt++;
-    Register reg;
-    reg.head.resize(rule.head.size());
-    reg.body.resize(rule.body.size());
-    reg.freelink.resize(rule.freelink_num);
-    reg.freelink_pos.resize(rule.freelink_num);
+    Register reg(rule);
     if (find_atom(rule,reg)) {
         commit(rule,reg);
+        num_rules_success++;
         return true;
     } else {
         return false;
@@ -431,14 +438,14 @@ Rule make_a_a_none_rule() {
 int main(void) {
     // init
 
-    // make_XabaaaaabaaaX_graph(4000);
-    // rulelist = { make_aba_rule() };
+    make_XabaaaaabaaaX_graph(100000);
+    rulelist = { make_aba_rule() };
 
-    // make_baaab_graph(50000);
+    // make_baaab_graph(100000);
     // rulelist = { make_aa_to_a_rule() };
 
-    make_many_a_graph(7);
-    rulelist = { make_a_a_none_rule() };
+    // make_many_a_graph(100001);
+    // rulelist = { make_a_a_none_rule() };
 
     for (auto al : atomlist) {
         cout << al.first << " size = " << al.second.size() << endl;
@@ -455,7 +462,7 @@ int main(void) {
         }
         if (!success) break;
     }
-    print(try_rule_cnt);
+    print(num_rules_success);
 
     for (auto al : atomlist) {
         cout << al.first << " size = " << al.second.size() << endl;
