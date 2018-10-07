@@ -6,7 +6,7 @@ const int INF = 1e9;
 class Functor;
 class Link;
 class Atom;
-class Temp;
+class RuleAtom;
 class Guard;
 class Register;
 class Rule;
@@ -79,7 +79,7 @@ class Atom {
 
 // bodyのX=Yに対応していない
 
-class Temp{
+class RuleAtom{
   public:
     Functor functor;
 
@@ -94,9 +94,9 @@ class Temp{
     vector<int> link_reg;
     // registerID(link_posでatomかfreelinkか振り分け)
 
-    Temp() {}
-    ~Temp() {}
-    Temp(Functor f, vector<Functor> lf, vector<int> dp, vector<int> lr):
+    RuleAtom() {}
+    ~RuleAtom() {}
+    RuleAtom(Functor f, vector<Functor> lf, vector<int> dp, vector<int> lr):
         functor(f), link_functor(lf), dst_pos(dp), link_reg(lr) {}
 };
 
@@ -109,9 +109,9 @@ class Guard{
 class Rule {
   public:
     int freelink_num;
-    vector<Temp> head;
+    vector<RuleAtom> head;
     vector<Guard> gurad;
-    vector<Temp> body;
+    vector<RuleAtom> body;
     Rule() {}
     ~Rule() {}
 };
@@ -151,7 +151,7 @@ bool set_atom_to_reg(Rule &rule, Register &reg, Atom* atom, int hi) {
     }
 
     reg.head[hi] = atom;
-    const Temp &rule_atom = rule.head[hi];
+    const RuleAtom &rule_atom = rule.head[hi];
 
     /* リンクが合っているか */
     int arity = atom->functor.arity;
@@ -179,12 +179,15 @@ bool set_atom_to_reg(Rule &rule, Register &reg, Atom* atom, int hi) {
     }
 
     /* リンクをレジスタに登録 */
+    // これDFS？閉路どうなってる？
+    // 自己ループは？
     for (int i = 0; i < arity; i++) {
         Atom* dst_atom = atom->link[i].dst_atom;
         int link_reg = rule_atom.link_reg[i];
 
         if (rule_atom.link_functor[i] == FL) {
             // 自由リンク
+            /* TODO: Link class そのまま代入するだけ！ */
             reg.freelink[link_reg] = dst_atom;
             reg.freelink_pos[link_reg] = atom->link[i].dst_pos;
         } else if (reg.head[link_reg] == NULL) {
@@ -354,15 +357,15 @@ void make_XabaaaaabaaaX_graph(int n) {
 Rule make_aba_rule() {
     Rule rule;
     rule.head = {
-        Temp(A2, {B2,FL}, {1,-1}, {1,0}),
-        Temp(B2, {A2,A2}, {1, 0}, {2,0}),
-        Temp(A2, {FL,B2}, {-1,0}, {1,1})
+        RuleAtom(A2, {B2,FL}, {1,-1}, {1,0}),
+        RuleAtom(B2, {A2,A2}, {1, 0}, {2,0}),
+        RuleAtom(A2, {FL,B2}, {-1,0}, {1,1})
     };
     rule.freelink_num = 2;
     rule.body = {
-        Temp(B2, {A2,FL}, {1,-1}, {1,0}),
-        Temp(A2, {B2,B2}, {1, 0}, {2,0}),
-        Temp(B2, {FL,A2}, {-1,0}, {1,1})
+        RuleAtom(B2, {A2,FL}, {1,-1}, {1,0}),
+        RuleAtom(A2, {B2,B2}, {1, 0}, {2,0}),
+        RuleAtom(B2, {FL,A2}, {-1,0}, {1,1})
     };
     return rule;
 }
@@ -397,12 +400,12 @@ void make_baaab_graph(int n) {
 Rule make_aa_to_a_rule() {
     Rule rule;
     rule.head = {
-        Temp(A2, {A2,FL}, {1,-1}, {1,0}),
-        Temp(A2, {FL,A2}, {-1,0}, {1,1})
+        RuleAtom(A2, {A2,FL}, {1,-1}, {1,0}),
+        RuleAtom(A2, {FL,A2}, {-1,0}, {1,1})
     };
     rule.freelink_num = 2;
     rule.body = {
-        Temp(A2, {FL,FL}, {-1,-1}, {1,0})
+        RuleAtom(A2, {FL,FL}, {-1,-1}, {1,0})
     };
     return rule;
 }
@@ -421,12 +424,12 @@ void make_many_a_graph(int n) {
 Rule make_a_a_none_rule() {
     Rule rule;
     rule.head = {
-        Temp(A0, {}, {}, {}),
-        Temp(A0, {}, {}, {})
+        RuleAtom(A0, {}, {}, {}),
+        RuleAtom(A0, {}, {}, {})
     };
     rule.freelink_num = 0;
     rule.body = {
-        Temp(B0, {}, {}, {})
+        RuleAtom(B0, {}, {}, {})
     };
     return rule;
 }
