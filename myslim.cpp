@@ -133,7 +133,6 @@ class Register {
     }
 };
 
-
 // ----------------------------------------------------------------------
 
 /*
@@ -250,7 +249,7 @@ bool find_atom(Rule &rule, Register &reg) {
     }
 }
 
-void commit(Rule &rule, Register &reg) {
+void rewrite(Rule &rule, Register &reg) {
     for (Atom* &atom : reg.head) {
         assert(atom != NULL);
     }
@@ -312,7 +311,7 @@ long long num_rules_success = 0;
 bool try_rule(Rule &rule) {
     Register reg(rule);
     if (find_atom(rule,reg)) {
-        commit(rule,reg);
+        rewrite(rule,reg);
         num_rules_success++;
         return true;
     } else {
@@ -413,7 +412,7 @@ Rule make_aa_to_a_rule() {
 /* ---------------------------------------------------------- */
 
 // a,a,a,...,a.
-void make_many_a_graph(int n) {
+void make_many_a_to_b(int n) {
     for (int i = 0; i < n; i++) {
         Atom *cur = new Atom(A0);
         cur->add_to_atomlist();
@@ -421,7 +420,7 @@ void make_many_a_graph(int n) {
 }
 
 // a,a :- b.
-Rule make_a_a_none_rule() {
+Rule make_a_a_to_b_rule() {
     Rule rule;
     rule.head = {
         RuleAtom(A0, {}, {}, {}),
@@ -441,14 +440,14 @@ Rule make_a_a_none_rule() {
 int main(void) {
     // init
 
-    make_XabaaaaabaaaX_graph(100000);
-    rulelist = { make_aba_rule() };
+    // make_XabaaaaabaaaX_graph(100000);
+    // rulelist = { make_aba_rule() };
 
-    // make_baaab_graph(100000);
-    // rulelist = { make_aa_to_a_rule() };
+    make_baaab_graph(10000000);
+    rulelist = { make_aa_to_a_rule() };
 
-    // make_many_a_graph(100001);
-    // rulelist = { make_a_a_none_rule() };
+    // make_many_a_to_b(10000000);
+    // rulelist = { make_a_a_to_b_rule() };
 
     for (auto al : atomlist) {
         cout << al.first << " size = " << al.second.size() << endl;
@@ -473,3 +472,4 @@ int main(void) {
 
     return 0;
 }
+
