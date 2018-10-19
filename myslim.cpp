@@ -1,139 +1,40 @@
-#include <bits/stdc++.h>
-using namespace std;
-#define print(x) cerr << (#x) << ": " << (x) << endl;
-const int INF = 1e9;
+#include "myslim.hpp"
 
-class Functor;
-class Link;
-class Atom;
-class RuleAtom;
-class Guard;
-class Register;
-class Rule;
+bool find_atom(Rule &rule, Register &reg);
+bool set_atom_to_reg(Rule &rule, Register &reg, Atom* atom, int hi);
+void remove_atom_from_reg(Rule &rule, Register &reg, Atom* atom, int hi);
+void rewrite(Rule &rule, Register &reg);
 
-map<Functor,list<Atom*>> atomlist;
-vector<Rule> rulelist;
-
-class Functor {
-  public:
-    int arity;
-    string name;
-    Functor() {}
-    ~Functor() {}
-    Functor(int a, string n): arity(a),name(n) {}
-
-    bool operator==(const Functor r) const {
-        return arity == r.arity && name == r.name;
+/*
+    ルール内の未決定のアトムを1つ選び、
+    それにマッチするアトムをグラフの中から1つ選びレジスタに格納する
+*/
+bool find_atom(Rule &rule, Register &reg) {
+    // 未決定アトムの中で最小のアトムリストのものを選ぶ
+    int min_atomlist_size = INF, hi = -1;
+    for (int i = 0; i < (int)reg.head.size(); i++) {
+        if (reg.head[i] != NULL) continue;
+        int atomlist_size = atomlist[rule.head[i]->functor].size();
+        if (min_atomlist_size > atomlist_size) {
+            min_atomlist_size = atomlist_size;
+            hi = i;
+        }
     }
-    bool operator!=(const Functor r) const {
-        return arity != r.arity || name != r.name;
+    if (hi == -1) {
+        return true;
+    } else {
+        Functor functor = rule.head[hi]->functor;
+        for (auto &atom : atomlist[functor]) {
+            bool ok = set_atom_to_reg(rule, reg, atom, hi);
+            if (ok) {
+                if (find_atom(rule, reg)) return true;
+                else remove_atom_from_reg(rule, reg, atom, hi);
+            }
+        }
+        return false;
     }
-    bool operator<(const Functor r) const {
-        return name != r.name ? name < r.name : arity < r.arity;
-    }
+}
 
-    friend ostream& operator<<(ostream& ost, const Functor& r) {
-        ost << "<" << r.name << "," << r.arity << ">";
-        return ost;
-    }
-};
-
-const Functor A2 = {2, "a"};
-const Functor A0 = {0, "a"};
-const Functor B2 = {2, "b"};
-const Functor B0 = {0, "b"};
-const Functor FL = {0, ""};
-
-
-class Link {
-  public:
-    Atom *dst_atom;
-    int dst_pos;
-    Link() {}
-    ~Link() {}
-    Link(Atom *da, int dp): dst_atom(da), dst_pos(dp) {}
-};
-
-class Atom {
-  public:
-    Functor functor;
-    vector<Link> link;
-    list<Atom*>::iterator itr;
-
-    Atom() {}
-    ~Atom() {
-        assert(*itr == this);
-        atomlist[functor].erase(itr);
-    }
-    Atom(Functor f): functor(f) {
-        link.resize(functor.arity);
-    }
-    void add_to_atomlist() {
-        atomlist[functor].push_front(this);
-        itr = atomlist[functor].begin();
-    }
-
-    // isSymbol
-    // isInt
-};
-
-// bodyのX=Yに対応していない
-
-class RuleAtom{
-  public:
-    Functor functor;
-
-    vector<Functor> link_functor;
-    // gen(0) :- -> <100,0>
-    // gen(N) :- N>0 | -> <int,0>
-
-    vector<int> dst_pos;
-    // 非負整数 -> 接続位置
-    // -1      -> 自由リンク
-
-    vector<int> link_reg;
-    // registerID(link_posでatomかfreelinkか振り分け)
-
-    RuleAtom() {}
-    ~RuleAtom() {}
-    RuleAtom(Functor f, vector<Functor> lf, vector<int> dp, vector<int> lr):
-        functor(f), link_functor(lf), dst_pos(dp), link_reg(lr) {}
-};
-
-class Guard{
-  public:
-    string function;
-    vector<string> variable;
-};
-
-class Rule {
-  public:
-    int freelink_num;
-    vector<RuleAtom> head;
-    vector<Guard> gurad;
-    vector<RuleAtom> body;
-    Rule() {}
-    ~Rule() {}
-};
-
-// Matching 時に使う変数的役割
-class Register {
-  public:
-    vector<Atom*> head;
-    vector<Atom*> body;
-    vector<Atom*> freelink;
-    vector<int> freelink_pos;
-    Register() {}
-    ~Register() {}
-    Register(Rule &rule) {
-        head.resize(rule.head.size());
-        body.resize(rule.body.size());
-        freelink.resize(rule.freelink_num);
-        freelink_pos.resize(rule.freelink_num);
-    }
-};
-
-// ----------------------------------------------------------------------
 
 /*
     reg.head[hi] に atom をいれて問題がないか検査
@@ -141,7 +42,6 @@ class Register {
     問題があれば reg から外して false を返す
     再帰的に連結グラフのアトムを検査
 */
-
 bool set_atom_to_reg(Rule &rule, Register &reg, Atom* atom, int hi) {
 
     // 他でreg登録済みのアトム
@@ -150,49 +50,57 @@ bool set_atom_to_reg(Rule &rule, Register &reg, Atom* atom, int hi) {
     }
 
     reg.head[hi] = atom;
-    const RuleAtom &rule_atom = rule.head[hi];
+    RuleAtom *rule_atom = rule.head[hi];
 
     /* リンクが合っているか */
     int arity = atom->functor.arity;
     for (int i = 0; i < arity; i++) {
-        Atom* dst_atom = atom->link[i].dst_atom;
 
         // 自由リンク
-        if (rule_atom.link_functor[i] == FL) {
+        if (rule_atom->link[i].is_freelink()) {
             continue;
         }
 
+        Atom* dst_atom = atom->link[i].atom;
+
         // リンク先のファンクタが違う
-        if (dst_atom->functor != rule_atom.link_functor[i]) {
+        if (dst_atom->functor != rule_atom->link[i].atom->functor) {
             reg.head[hi] = NULL;
             return false;
         }
 
         // 接続場所が合っているか
-        int dst_pos = rule_atom.dst_pos[i];
-        if (!(dst_atom->link[dst_pos].dst_atom == atom &&
-             dst_atom->link[dst_pos].dst_pos == i)) {
+        int dst_pos = rule_atom->link[i].pos;
+        if (dst_atom->link[dst_pos].atom != atom ||
+            dst_atom->link[dst_pos].pos != i) {
             reg.head[hi] = NULL;
             return false;
         }
     }
 
     /* リンクをレジスタに登録 */
-    // これDFS？閉路どうなってる？
-    // 自己ループは？
     for (int i = 0; i < arity; i++) {
-        Atom* dst_atom = atom->link[i].dst_atom;
-        int link_reg = rule_atom.link_reg[i];
 
-        if (rule_atom.link_functor[i] == FL) {
-            // 自由リンク
-            /* TODO: Link class そのまま代入するだけ！ */
-            reg.freelink[link_reg] = dst_atom;
-            reg.freelink_pos[link_reg] = atom->link[i].dst_pos;
-        } else if (reg.head[link_reg] == NULL) {
-            // 自由リンクでない かつ レジスタ未登録
-            bool ok = set_atom_to_reg(rule, reg, dst_atom, link_reg);
+        // 自由リンク
+        if (rule_atom->link[i].is_freelink()) {
+            reg.freelink[rule_atom->link[i].freelinkID()] = atom->link[i];
+            continue;
+        }
+
+        Atom* dst_atom = atom->link[i].atom;
+        int dst_id = rule_atom->link[i].atom->id; // ルールでは来るはずのid
+
+        // 自由リンクでない かつ レジスタ[dst_id]は未登録
+        if (reg.head[dst_id] == NULL) {
+            bool ok = set_atom_to_reg(rule, reg, dst_atom, dst_id);
             if (!ok) {
+                reg.head[hi] = NULL;
+                return false;
+            }
+        }
+        // 自由リンクでない かつ レジスタ[dst_id]は登録済み
+        else if (reg.head[dst_id] != NULL) {
+            if (reg.head[dst_id]->link[rule_atom->link[i].pos].atom != atom) {
                 reg.head[hi] = NULL;
                 return false;
             }
@@ -208,44 +116,20 @@ void remove_atom_from_reg(Rule &rule, Register &reg, Atom* atom, int hi) {
 
     int arity = functor.arity;
     for (int i = 0; i < arity; i++) {
-        Atom* dst_atom = atom->link[i].dst_atom;
-        int link_reg = rule.head[hi].link_reg[i];
 
-        if (rule.head[hi].link_functor[i] == FL) {
-            // 自由リンク
-            reg.freelink[link_reg] =  NULL;
-            reg.freelink_pos[link_reg] = 0;
-        } else if (reg.head[link_reg] != NULL) {
-            // 自由リンクでない かつ レジスタ登録済み
-            remove_atom_from_reg(rule, reg, dst_atom, link_reg);
+        // 自由リンク
+        if (rule.head[hi]->link[i].is_freelink()) {
+            int fi = rule.head[hi]->link[i].freelinkID();
+            reg.freelink[fi] = Link(NULL, 0);
+            continue;
         }
-    }
-}
-
-bool find_atom(Rule &rule, Register &reg) {
-    // 未決定アトムの中で最小のアトムリストのものを選ぶ
-    int min_atomlist_size = INF, hi = -1;
-    for (int i = 0; i < (int)reg.head.size(); i++) {
-        if (reg.head[i] != NULL) continue;
-        int atomlist_size = atomlist[rule.head[i].functor].size();
-        if ( min_atomlist_size > atomlist_size) {
-            min_atomlist_size = atomlist_size;
-            hi = i;
+        
+        Atom* dst_atom = atom->link[i].atom;
+        int dst_id = rule.head[hi]->link[i].atom->id;
+        // 自由リンクでない かつ レジスタ登録済み
+        if (reg.head[dst_id] != NULL) {
+            remove_atom_from_reg(rule, reg, dst_atom, dst_id);
         }
-    }
-    if (hi == -1) {
-        // 全て決定している
-        return true;
-    } else {
-        Functor functor = rule.head[hi].functor;
-        for (auto &atom : atomlist[functor]) {
-            bool ok = set_atom_to_reg(rule,reg,atom,hi);
-            if (ok) {
-                if (find_atom(rule,reg)) return true;
-                else remove_atom_from_reg(rule,reg,atom,hi);
-            }
-        }
-        return false;
     }
 }
 
@@ -253,54 +137,58 @@ void rewrite(Rule &rule, Register &reg) {
     for (Atom* &atom : reg.head) {
         assert(atom != NULL);
     }
-
 /*
     freelinkがheadを指しているとき、
     そのfreelinkを新しいほうにつなぎ変えてからもとのheadを消す必要がある
-    (X=Yについてはまだかんがえていない)
 */
 
     const int rule_body_size = rule.body.size();
 
     // 1. 新しいアトムを生成する
     for (int i = 0; i < rule_body_size; i++) {
-        reg.body[i] = new Atom(rule.body[i].functor);
-        reg.body[i]->add_to_atomlist();
+        reg.body[i] = new Atom(rule.body[i]->functor);
     }
 
     // 2. 自由リンクの先からこちらを向いてるものを新しいアトムに指す
     for (int i = 0; i < rule_body_size; i++) {
-        const int link_functor_size = rule.body[i].link_functor.size();
-        for (int j = 0; j < link_functor_size; j++) {
+        const int arity = rule.body[i]->functor.arity;
+        for (int j = 0; j < arity; j++) {
             // bodyのi番目のアトムのj番目のリンクについて
 
-            if (rule.body[i].link_functor[j] == FL) {
-                int fi = rule.body[i].link_reg[j];
-                reg.freelink[fi]->link[reg.freelink_pos[fi]].dst_atom = reg.body[i];
-                reg.freelink[fi]->link[reg.freelink_pos[fi]].dst_pos = j;
+            if (rule.body[i]->link[j].is_freelink()) {
+                int fi = rule.body[i]->link[j].freelinkID();
+                int dst_pos = reg.freelink[fi].pos;
+                reg.freelink[fi].atom->link[dst_pos].atom = reg.body[i];
+                reg.freelink[fi].atom->link[dst_pos].pos = j;
             }
         }
     }
 
     // 3. bodyatomから自由リンクを指す & 局所リンクを繋ぐ
     for (int i = 0; i < rule_body_size; i++) {
-        const int link_functor_size = rule.body[i].link_functor.size();
-        for (int j = 0; j < link_functor_size; j++) {
+        const int arity = rule.body[i]->functor.arity;
+        for (int j = 0; j < arity; j++) {
             // bodyのi番目のアトムのj番目のリンクについて
-            int li = rule.body[i].link_reg[j];
-            // li : bodyのi番目のアトムのj番目のリンク先のレジスタ番号
-
-            if (rule.body[i].link_functor[j] == FL) {
-                reg.body[i]->link[j].dst_atom = reg.freelink[li];
-                reg.body[i]->link[j].dst_pos = reg.freelink_pos[li];
+            if (rule.body[i]->link[j].is_freelink()) {
+                int fi = rule.body[i]->link[j].freelinkID();
+                reg.body[i]->link[j] = reg.freelink[fi];
             } else {
-                reg.body[i]->link[j].dst_atom = reg.body[li];
-                reg.body[i]->link[j].dst_pos = rule.body[i].dst_pos[j];
+                int li = rule.body[i]->link[j].atom->id;
+                reg.body[i]->link[j].atom = reg.body[li];
+                reg.body[i]->link[j].pos = rule.body[i]->link[j].pos;
             }
         }
     }
 
-    // 4. headatomを消す
+    // 4. 自由リンク同士の接続
+    for (pair<int,int> &p : rule.connect) {
+        int u = p.first;
+        int v = p.second;
+        reg.freelink[u].atom->link[reg.freelink[u].pos] = reg.freelink[v];
+        reg.freelink[v].atom->link[reg.freelink[v].pos] = reg.freelink[u];
+    }
+
+    // 5. headatomを消す
     for (auto &atom : reg.head) {
         delete atom;
     }
@@ -322,11 +210,15 @@ bool try_rule(Rule &rule) {
 
 /* ---------------------------------------------------------- */
 
+const Functor A2 = {2, "a"};
+const Functor A0 = {0, "a"};
+const Functor B2 = {2, "b"};
+const Functor B0 = {0, "b"};
+
 // X = a(a(a(b(a(... (X))))))
 void make_XabaaaaabaaaX_graph(int n) {
     srand(time(NULL));
     Atom *front = new Atom(B2);
-    front->add_to_atomlist();
     Atom *pre = front;
     for (int i = 0; i < n-1; i++) {
         Functor functor;
@@ -337,35 +229,40 @@ void make_XabaaaaabaaaX_graph(int n) {
         }
 
         Atom *cur = new Atom(functor);
-        cur->add_to_atomlist();
 
-        pre->link[0].dst_atom = cur;
-        pre->link[0].dst_pos = 1;
-        cur->link[1].dst_atom = pre;
-        cur->link[1].dst_pos = 0;
+        pre->link[0].atom = cur;
+        pre->link[0].pos = 1;
+        cur->link[1].atom = pre;
+        cur->link[1].pos = 0;
         pre = cur;
     }
 
-    pre->link[0].dst_atom = front;
-    pre->link[0].dst_pos = 1;
-    front->link[1].dst_atom = pre;
-    front->link[1].dst_pos = 0;
+    pre->link[0].atom = front;
+    pre->link[0].pos = 1;
+    front->link[1].atom = pre;
+    front->link[1].pos = 0;
 }
 
 // X = a(b(a(Y))) :- X = b(a(b(Y))).
 Rule make_aba_rule() {
     Rule rule;
     rule.head = {
-        RuleAtom(A2, {B2,FL}, {1,-1}, {1,0}),
-        RuleAtom(B2, {A2,A2}, {1, 0}, {2,0}),
-        RuleAtom(A2, {FL,B2}, {-1,0}, {1,1})
+        new RuleAtom(A2, 0, {}),
+        new RuleAtom(B2, 1, {}),
+        new RuleAtom(A2, 2, {}),
     };
+    rule.head[0]->link = {RuleLink(rule.head[1], 1), RuleLink(NULL, 0)};
+    rule.head[1]->link = {RuleLink(rule.head[2], 1), RuleLink(rule.head[0], 0)};
+    rule.head[2]->link = {RuleLink(NULL, 1), RuleLink(rule.head[1], 0)};
     rule.freelink_num = 2;
     rule.body = {
-        RuleAtom(B2, {A2,FL}, {1,-1}, {1,0}),
-        RuleAtom(A2, {B2,B2}, {1, 0}, {2,0}),
-        RuleAtom(B2, {FL,A2}, {-1,0}, {1,1})
+        new RuleAtom(B2, 0, {}),
+        new RuleAtom(A2, 1, {}),
+        new RuleAtom(B2, 2, {}),
     };
+    rule.body[0]->link = {RuleLink(rule.body[1], 1), RuleLink(NULL, 0)};
+    rule.body[1]->link = {RuleLink(rule.body[2], 1), RuleLink(rule.body[0], 0)};
+    rule.body[2]->link = {RuleLink(NULL, 1), RuleLink(rule.body[1], 0)};
     return rule;
 }
 
@@ -376,46 +273,57 @@ Rule make_aba_rule() {
 void make_baaab_graph(int n) {
     srand(time(NULL));
     Atom *front = new Atom(B2);
-    front->add_to_atomlist();
     Atom *pre = front;
     for (int i = 0; i < n; i++) {
         Atom *cur = new Atom(A2);
-        cur->add_to_atomlist();
 
-        pre->link[0].dst_atom = cur;
-        pre->link[0].dst_pos = 1;
-        cur->link[1].dst_atom = pre;
-        cur->link[1].dst_pos = 0;
+        pre->link[0].atom = cur;
+        pre->link[0].pos = 1;
+        cur->link[1].atom = pre;
+        cur->link[1].pos = 0;
         pre = cur;
     }
 
-    pre->link[0].dst_atom = front;
-    pre->link[0].dst_pos = 1;
-    front->link[1].dst_atom = pre;
-    front->link[1].dst_pos = 0;
+    pre->link[0].atom = front;
+    pre->link[0].pos = 1;
+    front->link[1].atom = pre;
+    front->link[1].pos = 0;
 }
 
 // X = a(a(Y)) :- X = a(Y)
 Rule make_aa_to_a_rule() {
     Rule rule;
     rule.head = {
-        RuleAtom(A2, {A2,FL}, {1,-1}, {1,0}),
-        RuleAtom(A2, {FL,A2}, {-1,0}, {1,1})
+        new RuleAtom(A2, 0, {}),
+        new RuleAtom(A2, 1, {}),
     };
+    rule.head[0]->link = {RuleLink(rule.head[1], 1), RuleLink(NULL, 0)};
+    rule.head[1]->link = {RuleLink(NULL, 1), RuleLink(rule.head[0], 0)};
     rule.freelink_num = 2;
     rule.body = {
-        RuleAtom(A2, {FL,FL}, {-1,-1}, {1,0})
+        new RuleAtom(A2, 0, {}),
     };
+    rule.body[0]->link = {RuleLink(NULL, 1), RuleLink(NULL, 0)};
     return rule;
 }
 
+// X = a(Y) :- X = Y
+Rule make_a_to_XY_rule() {
+    Rule rule;
+    rule.head = {
+        new RuleAtom(A2, 0, {}),
+    };
+    rule.head[0]->link = {RuleLink(NULL, 1), RuleLink(NULL, 0)};
+    rule.freelink_num = 2;
+    rule.connect = {{0,1}};
+    return rule;
+}
 /* ---------------------------------------------------------- */
 
 // a,a,a,...,a.
-void make_many_a_to_b(int n) {
+void make_many_a(int n) {
     for (int i = 0; i < n; i++) {
-        Atom *cur = new Atom(A0);
-        cur->add_to_atomlist();
+        new Atom(A0);
     }
 }
 
@@ -423,12 +331,12 @@ void make_many_a_to_b(int n) {
 Rule make_a_a_to_b_rule() {
     Rule rule;
     rule.head = {
-        RuleAtom(A0, {}, {}, {}),
-        RuleAtom(A0, {}, {}, {})
+        new RuleAtom(A0, 0, {}),
+        new RuleAtom(A0, 1, {}),
     };
     rule.freelink_num = 0;
     rule.body = {
-        RuleAtom(B0, {}, {}, {})
+        new RuleAtom(B0, 0, {}),
     };
     return rule;
 }
@@ -444,9 +352,10 @@ int main(void) {
     // rulelist = { make_aba_rule() };
 
     make_baaab_graph(10000000);
-    rulelist = { make_aa_to_a_rule() };
+    // rulelist = { make_aa_to_a_rule() };
+    rulelist = { make_a_to_XY_rule() };
 
-    // make_many_a_to_b(10000000);
+    // make_many_a(10000000);
     // rulelist = { make_a_a_to_b_rule() };
 
     for (auto al : atomlist) {
