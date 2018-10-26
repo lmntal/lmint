@@ -84,22 +84,21 @@ class Parser{
     TopSet graph;
     Parser() {}
     ~Parser() {}
-    void show();
-};
-void Parser::show() {
-    // Graph
-    printf("------------ Graph ------------\n");
-    graph.show();
+    void show() {
+        // Graph
+        printf("------------ Graph ------------\n");
+        graph.show();
 
-    // Rule
-    int R = rule_head.size();
-    for (int i = 0; i < R; i++) {
-        printf("------------ Rule %d ------------\n", i);
-        rule_head[i].show();
-        cout << " :- " << endl;
-        rule_body[i].show();
+        // Rule
+        int R = rule_head.size();
+        for (int i = 0; i < R; i++) {
+            printf("------------ Rule %d ------------\n", i);
+            rule_head[i].show();
+            cout << " :- " << endl;
+            rule_body[i].show();
+        }
     }
-}
+};
 
 
 class Result_of_nest{
