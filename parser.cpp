@@ -1,22 +1,40 @@
-#include "myslim.hpp"
+#include <iostream>
+using std::cin;
+using std::cout;
+using std::cerr;
+using std::endl;
+using std::ostream;
+using std::getline;
+#include <vector>
+using std::vector;
+#include <string>
+using std::string;
+using std::to_string;
+#include <map>
+using std::pair;
+#include <algorithm>
+using std::max;
+using std::min;
+#include <cassert>
 
 // EBNF of LMNtal parser
-//  Program := {(Rule | Graph) '.'}
-//  Rule := TopSet ':-' TopSet
-//  Graph := TopSet
-//  TopSet := (Nest | Nest '=' Nest) {',' (Nest | Nest '=' Nest)}
-//  Nest := Link | Atom | Atom '(' ')' | Atom '(' Nest {',' Nest} ')'
-//  Atom := [a-z]{[a-zA-Z_0-9]}
-//  Link := [A-Z_]{[a-zA-Z_0-9]}
+// Program := {(Rule | Graph) '.'}
+// Rule := TopSet ':-' TopSet
+// Graph := TopSet
+// TopSet := (Nest | Nest '=' Nest) {',' (Nest | Nest '=' Nest)}
+// Nest := Link | Atom | Atom '(' ')' | Atom '(' Nest {',' Nest} ')'
+// Atom := [a-z]{[a-zA-Z_0-9]}
+// Link := [A-Z_]{[a-zA-Z_0-9]}
 
 class Parser;
 class TopSet;
 class Result_of_nest;
 
+
+vector<string> read_istream();
 void syntax_error(vector<string> &raw_inputs, int &y, int &x, string message);
 void read_ignore(vector<string> &raw_inputs, int &y, int &x);
 bool read_token(vector<string> &raw_inputs, int &y, int &x, string token);
-vector<string> read_istream();
 Parser read_sentences(vector<string> &raw_inputs, int &y, int &x);
 TopSet read_topset(vector<string> &raw_inputs, int &y, int &x);
 Result_of_nest read_nest(vector<string> &raw_inputs, int &y, int &x, TopSet &topset);
@@ -24,35 +42,26 @@ string read_name(vector<string> &raw_inputs, int &y, int &x);
 bool is_link_initial(char c);
 bool is_atom_initial(char c);
 
-class Parser{
-  public:
-    vector<TopSet> rule_head;
-    vector<TopSet> rule_body;
-    vector<TopSet> graph;
-    Parser() {}
-    ~Parser() {}
-    
-};
 
 class TopSet{
   public:
-    int atom_num;
     static int orig_local_link_num;
     vector<string> atom_name;
     vector<vector<string>> atom_args;
     vector<pair<string,string>> connect;
-    TopSet(): atom_num(0) {}
+    TopSet() {}
     ~TopSet() {}
     int add_atom(string atom) {
         atom_name.push_back(atom);
-        atom_args.resize(atom_num + 1);
-        return atom_num++;
+        int atom_id = atom_args.size();
+        atom_args.resize(atom_id + 1);
+        return atom_id;
     }
     static string make_orig_local_link_num() {
         return "#" + to_string(orig_local_link_num++);
     }
     void show() {
-        for (int i = 0; i < atom_num; i++) {
+        for (int i = 0; i < (int)atom_name.size(); i++) {
             cout << atom_name[i] << "(";
             for (int j = 0; j < (int)atom_args[i].size(); j++) {
                 cout << atom_args[i][j] 
@@ -68,6 +77,31 @@ class TopSet{
 int TopSet::orig_local_link_num = 0;
 
 
+class Parser{
+  public:
+    vector<TopSet> rule_head;
+    vector<TopSet> rule_body;
+    TopSet graph;
+    Parser() {}
+    ~Parser() {}
+    void show();
+};
+void Parser::show() {
+    // Graph
+    printf("------------ Graph ------------\n");
+    graph.show();
+
+    // Rule
+    int R = rule_head.size();
+    for (int i = 0; i < R; i++) {
+        printf("------------ Rule %d ------------\n", i);
+        rule_head[i].show();
+        cout << " :- " << endl;
+        rule_body[i].show();
+    }
+}
+
+
 class Result_of_nest{
   public:
     bool is_link;
@@ -80,9 +114,20 @@ class Result_of_nest{
 
 };
 
+
+vector<string> read_istream() {
+    vector<string> lines;
+    string s;
+    while (getline(cin, s)) {
+        lines.push_back(s);
+    }
+    return lines;
+}
+
+
 void syntax_error(vector<string> &raw_inputs, int &y, int &x, string message) {
     cerr << "Syntax Error: " << message << " at line " << y+1 << " column " << x+1 << endl;
-    int l = max(x-10, 0);
+    int l = max(x-30, 0);
     cerr << raw_inputs[y].substr(l, 20) << endl;
     cerr << string(x-l, ' ') << "^" << endl;
     exit(1);
@@ -131,16 +176,6 @@ bool read_token(vector<string> &raw_inputs, int &y, int &x, string token) {
 }
 
 
-vector<string> read_istream() {
-    vector<string> lines;
-    string s;
-    while (getline(cin, s)) {
-        lines.push_back(s);
-    }
-    return lines;
-}
-
-
 // Program := {(Rule | Graph) '.'}
 // Rule := TopSet ':-' TopSet
 // Graph := TopSet
@@ -150,9 +185,12 @@ Parser read_sentences(vector<string> &raw_inputs, int &y, int &x) {
     while (y < (int)raw_inputs.size()) {
         TopSet topset = read_topset(raw_inputs, y, x);
 
+        #define append(a, b) a.insert(a.end(), b.begin(), b.end())
         // Graph
         if (read_token(raw_inputs, y, x, ".")) {
-            parser.graph.push_back(topset);
+            append(parser.graph.atom_name, topset.atom_name);
+            append(parser.graph.atom_args, topset.atom_args);
+            append(parser.graph.connect, topset.connect);
         }
         // Rule
         else if (read_token(raw_inputs, y, x, ":-")) {
@@ -178,6 +216,7 @@ Parser read_sentences(vector<string> &raw_inputs, int &y, int &x) {
 TopSet read_topset(vector<string> &raw_inputs, int &y, int &x) {
     TopSet topset;
     do {
+        int tokenX = x, tokenY = y;
         Result_of_nest result1 = read_nest(raw_inputs, y, x, topset);
         if (read_token(raw_inputs, y, x, "=")) {
             Result_of_nest result2 = read_nest(raw_inputs, y, x, topset);
@@ -210,9 +249,8 @@ TopSet read_topset(vector<string> &raw_inputs, int &y, int &x) {
         // Nest
         else {
             if (result1.is_link) {
-                // y, x より前で最後にあった result1.link_name を指したい
-                syntax_error(raw_inputs, y, x,
-                    "top-level variable occurrence: " + result1.link_name
+                syntax_error(raw_inputs, tokenX, tokenY,
+                    "Top-level variable occurrence: " + result1.link_name
                 );
             }
         }
@@ -313,8 +351,7 @@ int main(){
     vector<string> raw_inputs = read_istream();
     int y = 0, x = 0;
     Parser parser = read_sentences(raw_inputs, y, x);
-    // TopSet topset = read_topset(raw_inputs, y, x);
-    // topset.show();
+    parser.show();
 
     return 0;
 }
