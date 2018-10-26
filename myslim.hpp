@@ -9,7 +9,6 @@ using std::getline;
 using std::vector;
 #include <string>
 using std::string;
-using std::to_string;
 #include <map>
 using std::map;
 using std::pair;
@@ -20,8 +19,7 @@ using std::max;
 using std::min;
 #include <cassert>
 
-#define print(x) cerr << (#x) << ": " << (x) << endl;
-const int INF = 1e9;
+#define debug(x) cerr << (#x) << ": " << (x) << endl;
 
 class Functor;
 class Atom;

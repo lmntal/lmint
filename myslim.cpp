@@ -11,11 +11,11 @@ void rewrite(Rule &rule, Register &reg);
 */
 bool find_atom(Rule &rule, Register &reg) {
     // 未決定アトムの中で最小のアトムリストのものを選ぶ
-    int min_atomlist_size = INF, hi = -1;
+    int min_atomlist_size = -1, hi = -1;
     for (int i = 0; i < (int)reg.head.size(); i++) {
         if (reg.head[i] != NULL) continue;
         int atomlist_size = atomlist[rule.head[i]->functor].size();
-        if (min_atomlist_size > atomlist_size) {
+        if (min_atomlist_size > atomlist_size || hi == -1) {
             min_atomlist_size = atomlist_size;
             hi = i;
         }
@@ -373,7 +373,7 @@ int main(void) {
         }
         if (!success) break;
     }
-    print(num_rules_success);
+    debug(num_rules_success);
 
     for (auto al : atomlist) {
         cout << al.first << " size = " << al.second.size() << endl;
