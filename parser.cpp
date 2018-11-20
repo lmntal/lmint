@@ -15,7 +15,7 @@ vector<string> read_istream() {
 void syntax_error(vector<string> &raw_inputs, int &y, int &x, string message) {
     cerr << "Syntax Error: " << message << " at line " << y+1 << " column " << x+1 << endl;
     int l = max(x-30, 0);
-    cerr << raw_inputs[y].substr(l, 30) << endl;
+    cerr << raw_inputs[y].substr(l, 70) << endl;
     cerr << string(x-l, ' ') << "^" << endl;
     exit(1);
 }
@@ -349,8 +349,6 @@ void set_graph(TopSet &graph) {
         atoms[i] = new Atom(functor);
     }
 
-    build_link_port(graph);
-
     for (int i = 0; i < atom_num; i++) {
         Functor functor = atoms[i]->functor;
         for (int j = 0; j < functor.arity; j++) {
@@ -380,8 +378,6 @@ void set_rule(TopSet &head, TopSet &body) {
         Functor functor(body.atom_args[i].size(), body.atom_name[i]);
         body_atoms[i] = new RuleAtom(functor, i);
     }
-    build_link_port(head);
-    build_link_port(body);
 
     map<string, int> free_link_id;
     for (int i = 0; i < head_atom_num; i++) {
@@ -460,8 +456,18 @@ void parse() {
     int y = 0, x = 0;
     Parser parser = read_sentences(raw_inputs, y, x);
     // parser.show();
-    set_graph(parser.graph);
+
+    build_link_port(parser.graph);
+    check_link_num_of_graph(parser.graph);
+    
     int rule_num = parser.rule_head.size();
+    for (int i = 0; i < rule_num; i++) {
+        build_link_port(parser.rule_head[i]);
+        build_link_port(parser.rule_body[i]);
+        check_link_num_of_rule(i, parser.rule_head[i], parser.rule_body[i]);
+    }
+
+    set_graph(parser.graph);
     for (int i = 0; i < rule_num; i++) {
         set_rule(parser.rule_head[i], parser.rule_body[i]);
     }
