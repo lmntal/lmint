@@ -1,0 +1,21 @@
+// /* one line > block comment
+// */ in one line comment
+
+/* // */ token,
+
+hoge(
+    fuga (
+        piyo /* yeah */  ,  // One Line)
+        after_comment
+    )
+)
+.
+
+
+a(a).
+
+a(  /* strange comment */ X  )
+
+  :-
+
+        b  (  X  ) .
