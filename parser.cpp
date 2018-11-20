@@ -1,118 +1,6 @@
-#include <iostream>
-using std::cin;
-using std::cout;
-using std::cerr;
-using std::endl;
-using std::ostream;
-using std::getline;
-#include <vector>
-using std::vector;
-#include <string>
-using std::string;
-using std::to_string;
-#include <map>
-using std::pair;
-#include <algorithm>
-using std::max;
-using std::min;
-#include <cassert>
+#include "parser.hpp"
 
-// EBNF of LMNtal parser
-// Program := {(Rule | Graph) '.'}
-// Rule := TopSet ':-' TopSet
-// Graph := TopSet
-// TopSet := (Nest | Nest '=' Nest) {',' (Nest | Nest '=' Nest)}
-// Nest := Link | Atom | Atom '(' ')' | Atom '(' Nest {',' Nest} ')'
-// Atom := [a-z]{[a-zA-Z_0-9]}
-// Link := [A-Z_]{[a-zA-Z_0-9]}
-
-class Parser;
-class TopSet;
-class Result_of_nest;
-
-
-vector<string> read_istream();
-void syntax_error(vector<string> &raw_inputs, int &y, int &x, string message);
-void read_ignore(vector<string> &raw_inputs, int &y, int &x);
-bool read_token(vector<string> &raw_inputs, int &y, int &x, string token);
-Parser read_sentences(vector<string> &raw_inputs, int &y, int &x);
-TopSet read_topset(vector<string> &raw_inputs, int &y, int &x);
-Result_of_nest read_nest(vector<string> &raw_inputs, int &y, int &x, TopSet &topset);
-string read_name(vector<string> &raw_inputs, int &y, int &x);
-bool is_link_initial(char c);
-bool is_atom_initial(char c);
-
-
-class TopSet{
-  public:
-    static int orig_local_link_num;
-    vector<string> atom_name;
-    vector<vector<string>> atom_args;
-    vector<pair<string,string>> connect;
-    TopSet() {}
-    ~TopSet() {}
-    int add_atom(string atom) {
-        atom_name.push_back(atom);
-        int atom_id = atom_args.size();
-        atom_args.resize(atom_id + 1);
-        return atom_id;
-    }
-    static string make_orig_local_link_num() {
-        return "#" + to_string(orig_local_link_num++);
-    }
-    void show() {
-        for (int i = 0; i < (int)atom_name.size(); i++) {
-            cout << atom_name[i] << "(";
-            for (int j = 0; j < (int)atom_args[i].size(); j++) {
-                cout << atom_args[i][j] 
-                     << (j + 1 == (int)atom_args[i].size() ? "" : ", ");
-            }
-            cout << ")" << endl;
-        }
-        for (auto &p : connect) {
-            cout << p.first << " = " << p.second << endl;
-        }
-    }
-};
 int TopSet::orig_local_link_num = 0;
-
-
-class Parser{
-  public:
-    vector<TopSet> rule_head;
-    vector<TopSet> rule_body;
-    TopSet graph;
-    Parser() {}
-    ~Parser() {}
-    void show() {
-        // Graph
-        printf("------------ Graph ------------\n");
-        graph.show();
-
-        // Rule
-        int R = rule_head.size();
-        for (int i = 0; i < R; i++) {
-            printf("------------ Rule %d ------------\n", i);
-            rule_head[i].show();
-            cout << " :- " << endl;
-            rule_body[i].show();
-        }
-    }
-};
-
-
-class Result_of_nest{
-  public:
-    bool is_link;
-    int atom_id;
-    string link_name;
-    Result_of_nest(){}
-    ~Result_of_nest(){}
-    Result_of_nest(string link_name_): is_link(true), link_name(link_name_) {}
-    Result_of_nest(int atom_id_): is_link(false), atom_id(atom_id_) {}
-
-};
-
 
 vector<string> read_istream() {
     vector<string> lines;
@@ -127,7 +15,7 @@ vector<string> read_istream() {
 void syntax_error(vector<string> &raw_inputs, int &y, int &x, string message) {
     cerr << "Syntax Error: " << message << " at line " << y+1 << " column " << x+1 << endl;
     int l = max(x-30, 0);
-    cerr << raw_inputs[y].substr(l, 20) << endl;
+    cerr << raw_inputs[y].substr(l, 30) << endl;
     cerr << string(x-l, ' ') << "^" << endl;
     exit(1);
 }
@@ -323,7 +211,7 @@ bool is_link_initial(char c) {
 
 //  Atom := [a-z][a-zA-Z_0-9]*
 bool is_atom_initial(char c) {
-    return islower(c);
+    return islower(c) || c == '\'';
 }
 
 
@@ -331,26 +219,250 @@ bool is_atom_initial(char c) {
 //  Link := [A-Z_][a-zA-Z_0-9]*
 string read_name(vector<string> &raw_inputs, int &y, int &x) {
     string name;
-    while (x < (int)raw_inputs[y].size()) {
-        char c = raw_inputs[y][x];
-        if (isalpha(c) || isdigit(c) || c == '_') {
-            name += c;
+    if (raw_inputs[y][x] == '\'') {
+        int tokenY = y, tokenX = x;
+        x++;
+        name += '\'';
+        while (raw_inputs[y][x] != '\'') {
+            name += raw_inputs[y][x];
             x++;
-        } else {
-            break;
+            if (x == (int)raw_inputs[y].size()) {
+                syntax_error(raw_inputs, tokenY, tokenX, "Illegal Character");
+            }
+        }
+        x++;
+        name += '\'';
+    } else {
+        while (x < (int)raw_inputs[y].size()) {
+            char c = raw_inputs[y][x];
+            if (isalpha(c) || isdigit(c) || c == '_') {
+                name += c;
+                x++;
+            } else {
+                break;
+            }
         }
     }
     read_ignore(raw_inputs, y, x);
     return name;
 }
 
+// ---------------------------------------------------------------------------------
 
 
-int main(){
+void build_link_port(TopSet &topset) {
+    for (int atom_id = 0; atom_id < (int)topset.atom_name.size(); atom_id++) {
+        int arity = topset.atom_args[atom_id].size();
+        for (int link_id = 0; link_id < arity; link_id++) {
+            topset.link_port[topset.atom_args[atom_id][link_id]].push_back(TopSet::Link(false, atom_id, link_id));
+        }
+    }
+    for (int connect_id = 0; connect_id < (int)topset.connect.size(); connect_id++) {        
+        topset.link_port[topset.connect[connect_id].first ].push_back(TopSet::Link(true, connect_id, 1));
+        topset.link_port[topset.connect[connect_id].second].push_back(TopSet::Link(true, connect_id, 2));
+    }
+}
+
+
+void check_link_num_of_graph(TopSet &topset) {
+    for (auto &itr : topset.link_port) {
+        string link_name = itr.first;
+        vector<TopSet::Link> &link_port = itr.second;
+        if ((int)link_port.size() > 2) {
+            cerr << "Semantic Error: link " << link_name
+                 << " appears more than twice" << endl;
+            exit(1);
+        }
+        if ((int)link_port.size() == 1) {
+            cerr << "Semantic Error: link " << link_name
+                 << " is global singleton" << endl;
+            exit(1);
+        }
+    }
+}
+
+
+void check_link_num_of_rule(int rule_id, TopSet &head, TopSet &body) {
+    for (auto &itr : head.link_port) {
+        string link_name = itr.first;
+        vector<TopSet::Link> &link_port = itr.second;
+        if ((int)link_port.size() > 2) {
+            cerr << "Semantic Error: link " << link_name
+                 << " in head of rule " << rule_id
+                 << " appears more than twice" << endl;
+            exit(1);
+        }
+        if ((int)link_port.size() == 1 && (int)body.link_port[link_name].size() != 1) {
+            cerr << "Semantic Error: link " << link_name
+                 << " in head of rule " << rule_id
+                 << " is free variable" << endl;
+            exit(1);
+        }
+    }
+
+    for (auto &itr : body.link_port) {
+        string link_name = itr.first;
+        vector<TopSet::Link> &link_port = itr.second;
+        if ((int)link_port.size() > 2) {
+            cerr << "Semantic Error: link " << link_name
+                 << " in body of rule " << rule_id
+                 << " appears more than twice" << endl;
+            exit(1);
+        }
+        if ((int)link_port.size() == 1 && (int)head.link_port[link_name].size() != 1) {
+            cerr << "Semantic Error: link " << link_name
+                 << " in body of rule " << rule_id
+                 << " is free variable" << endl;
+            exit(1);
+        }
+    }
+}
+
+
+
+TopSet::Link& follow_link(TopSet &topset, TopSet::Link &pre, string &link_name) {
+    for (TopSet::Link &to : topset.link_port[link_name]) {
+        if (to == pre) continue;
+        if (to.is_connector) {
+            if (to.pos == 1) {
+                TopSet::Link myself(true, to.id, 2);
+                return follow_link(topset, myself, topset.connect[to.id].second);
+            }
+            if (to.pos == 2) {
+                TopSet::Link myself(true, to.id, 1);
+                return follow_link(topset, myself, topset.connect[to.id].first);
+            }
+            assert(false);
+        } else {
+            return to;
+        }
+    }
+    return pre;
+}
+
+void set_graph(TopSet &graph) {
+
+    int atom_num = graph.atom_name.size();
+    vector<Atom*> atoms(atom_num);
+    for (int i = 0; i < atom_num; i++) {
+        Functor functor(graph.atom_args[i].size(), graph.atom_name[i]);
+        atoms[i] = new Atom(functor);
+    }
+
+    build_link_port(graph);
+
+    for (int i = 0; i < atom_num; i++) {
+        Functor functor = atoms[i]->functor;
+        for (int j = 0; j < functor.arity; j++) {
+            string link_name = graph.atom_args[i][j];
+            TopSet::Link myself(false, i, j);
+            TopSet::Link &to_link = follow_link(graph, myself, link_name);
+
+            assert(!to_link.is_connector);
+            atoms[i]->link[j] = Link(atoms[to_link.id], to_link.pos);
+        }
+    }
+}
+
+
+void set_rule(TopSet &head, TopSet &body) {
+
+    Rule rule;
+    int head_atom_num = head.atom_name.size();
+    int body_atom_num = body.atom_name.size();
+    vector<RuleAtom*> head_atoms(head_atom_num);
+    vector<RuleAtom*> body_atoms(body_atom_num);
+    for (int i = 0; i < head_atom_num; i++) {
+        Functor functor(head.atom_args[i].size(), head.atom_name[i]);
+        head_atoms[i] = new RuleAtom(functor, i);
+    }
+    for (int i = 0; i < body_atom_num; i++) {
+        Functor functor(body.atom_args[i].size(), body.atom_name[i]);
+        body_atoms[i] = new RuleAtom(functor, i);
+    }
+    build_link_port(head);
+    build_link_port(body);
+
+    map<string, int> free_link_id;
+    for (int i = 0; i < head_atom_num; i++) {
+        Functor functor = head_atoms[i]->functor;
+        for (int j = 0; j < functor.arity; j++) {
+            string link_name = head.atom_args[i][j];
+            TopSet::Link myself(false, i, j);
+            TopSet::Link &to_link = follow_link(head, myself, link_name);
+
+            // 自由リンク
+            if ((int)head.link_port[link_name].size() == 1) {
+                free_link_id[link_name] = rule.freelink_num;
+                head_atoms[i]->link[j] = RuleLink(rule.freelink_num);
+                rule.freelink_num++;
+            } else if (to_link.is_connector) {
+                string to_name = (to_link.pos == 1) ? head.connect[to_link.id].first : head.connect[to_link.id].second;
+                free_link_id[to_name] = rule.freelink_num;
+                head_atoms[i]->link[j] = RuleLink(rule.freelink_num);
+                rule.freelink_num++;
+            }
+            // 局所リンク
+            else {
+                head_atoms[i]->link[j] = RuleLink(head_atoms[to_link.id], to_link.pos);
+            }
+        }
+    }
+
+    for (int i = 0; i < body_atom_num; i++) {
+        Functor functor = body_atoms[i]->functor;
+        for (int j = 0; j < functor.arity; j++) {
+            string link_name = body.atom_args[i][j];
+            TopSet::Link myself(false, i, j);
+            TopSet::Link &to_link = follow_link(body, myself, link_name);
+
+            // 自由リンク
+            if ((int)body.link_port[link_name].size() == 1) {
+                body_atoms[i]->link[j] = RuleLink(free_link_id[link_name]);
+            } else if (to_link.is_connector) {
+                string to_name = (to_link.pos == 1) ? body.connect[to_link.id].first : body.connect[to_link.id].second;
+                body_atoms[i]->link[j] = RuleLink(free_link_id[to_name]);
+            }
+            // 局所リンク
+            else {
+                body_atoms[i]->link[j] = RuleLink(body_atoms[to_link.id], to_link.pos);
+            }
+        }
+    }
+
+    // connector
+    for (pair<string,string> &connector : body.connect) {
+        string link_name1 = connector.first;
+        string link_name2 = connector.second;
+        TopSet::Link null_link(true, -1, -1);
+        if ((int)body.link_port[link_name1].size() == 1) {
+            TopSet::Link &to_link = follow_link(body, null_link, link_name1);
+            if (to_link.is_connector) {
+                string to_name = (to_link.pos == 1) ? body.connect[to_link.id].first : body.connect[to_link.id].second;
+                rule.connector.push_back({free_link_id[link_name1], free_link_id[to_name]});
+            }
+        } else if ((int)body.link_port[link_name2].size() == 1) {
+            TopSet::Link &to_link = follow_link(body, null_link, link_name2);
+            if (to_link.is_connector) {
+                string to_name = (to_link.pos == 1) ? body.connect[to_link.id].first : body.connect[to_link.id].second;
+                rule.connector.push_back({free_link_id[link_name2], free_link_id[to_name]});
+            }
+        }
+    }
+    rule.head = head_atoms;
+    rule.body = body_atoms;
+    rulelist.push_back(rule);
+}
+
+
+void parse() {
     vector<string> raw_inputs = read_istream();
     int y = 0, x = 0;
     Parser parser = read_sentences(raw_inputs, y, x);
-    parser.show();
-
-    return 0;
+    // parser.show();
+    set_graph(parser.graph);
+    int rule_num = parser.rule_head.size();
+    for (int i = 0; i < rule_num; i++) {
+        set_rule(parser.rule_head[i], parser.rule_body[i]);
+    }
 }

@@ -1,14 +1,14 @@
-#include "myslim.hpp"
+#include "rule.hpp"
+#include "parser.hpp"
 
-bool find_atom(Rule &rule, Register &reg);
-bool set_atom_to_reg(Rule &rule, Register &reg, Atom* atom, int hi);
-void remove_atom_from_reg(Rule &rule, Register &reg, Atom* atom, int hi);
-void rewrite(Rule &rule, Register &reg);
+map<Functor,list<Atom*>> atomlist;
+vector<Rule> rulelist;
 
 /*
     ルール内の未決定のアトムを1つ選び、
     それにマッチするアトムをグラフの中から1つ選びレジスタに格納する
 */
+
 bool find_atom(Rule &rule, Register &reg) {
     // 未決定アトムの中で最小のアトムリストのものを選ぶ
     int min_atomlist_size = -1, hi = -1;
@@ -181,7 +181,7 @@ void rewrite(Rule &rule, Register &reg) {
     }
 
     // 4. 自由リンク同士の接続
-    for (pair<int,int> &p : rule.connect) {
+    for (pair<int,int> &p : rule.connector) {
         int u = p.first;
         int v = p.second;
         reg.freelink[u].atom->link[reg.freelink[u].pos] = reg.freelink[v];
@@ -208,161 +208,86 @@ bool try_rule(Rule &rule) {
 }
 
 
-/* ---------------------------------------------------------- */
+/* ----------------------------- dump ----------------------------- */
 
-const Functor A2 = {2, "a"};
-const Functor A0 = {0, "a"};
-const Functor B2 = {2, "b"};
-const Functor B0 = {0, "b"};
-
-// X = a(a(a(b(a(... (X))))))
-void make_XabaaaaabaaaX_graph(int n) {
-    srand(time(NULL));
-    Atom *front = new Atom(B2);
-    Atom *pre = front;
-    for (int i = 0; i < n-1; i++) {
-        Functor functor;
-        if (rand()%10 == 0) {
-            functor = B2;
-        } else {
-            functor = A2;
-        }
-
-        Atom *cur = new Atom(functor);
-
-        pre->link[0].atom = cur;
-        pre->link[0].pos = 1;
-        cur->link[1].atom = pre;
-        cur->link[1].pos = 0;
-        pre = cur;
-    }
-
-    pre->link[0].atom = front;
-    pre->link[0].pos = 1;
-    front->link[1].atom = pre;
-    front->link[1].pos = 0;
-}
-
-// X = a(b(a(Y))) :- X = b(a(b(Y))).
-Rule make_aba_rule() {
-    Rule rule;
-    rule.head = {
-        new RuleAtom(A2, 0, {}),
-        new RuleAtom(B2, 1, {}),
-        new RuleAtom(A2, 2, {}),
-    };
-    rule.head[0]->link = {RuleLink(rule.head[1], 1), RuleLink(NULL, 0)};
-    rule.head[1]->link = {RuleLink(rule.head[2], 1), RuleLink(rule.head[0], 0)};
-    rule.head[2]->link = {RuleLink(NULL, 1), RuleLink(rule.head[1], 0)};
-    rule.freelink_num = 2;
-    rule.body = {
-        new RuleAtom(B2, 0, {}),
-        new RuleAtom(A2, 1, {}),
-        new RuleAtom(B2, 2, {}),
-    };
-    rule.body[0]->link = {RuleLink(rule.body[1], 1), RuleLink(NULL, 0)};
-    rule.body[1]->link = {RuleLink(rule.body[2], 1), RuleLink(rule.body[0], 0)};
-    rule.body[2]->link = {RuleLink(NULL, 1), RuleLink(rule.body[1], 0)};
-    return rule;
-}
-
-
-/* ---------------------------------------------------------- */
-
-// X = b(a(a(a(a(... (X))))))
-void make_baaab_graph(int n) {
-    srand(time(NULL));
-    Atom *front = new Atom(B2);
-    Atom *pre = front;
-    for (int i = 0; i < n; i++) {
-        Atom *cur = new Atom(A2);
-
-        pre->link[0].atom = cur;
-        pre->link[0].pos = 1;
-        cur->link[1].atom = pre;
-        cur->link[1].pos = 0;
-        pre = cur;
-    }
-
-    pre->link[0].atom = front;
-    pre->link[0].pos = 1;
-    front->link[1].atom = pre;
-    front->link[1].pos = 0;
-}
-
-// X = a(a(Y)) :- X = a(Y)
-Rule make_aa_to_a_rule() {
-    Rule rule;
-    rule.head = {
-        new RuleAtom(A2, 0, {}),
-        new RuleAtom(A2, 1, {}),
-    };
-    rule.head[0]->link = {RuleLink(rule.head[1], 1), RuleLink(NULL, 0)};
-    rule.head[1]->link = {RuleLink(NULL, 1), RuleLink(rule.head[0], 0)};
-    rule.freelink_num = 2;
-    rule.body = {
-        new RuleAtom(A2, 0, {}),
-    };
-    rule.body[0]->link = {RuleLink(NULL, 1), RuleLink(NULL, 0)};
-    return rule;
-}
-
-// X = a(Y) :- X = Y
-Rule make_a_to_XY_rule() {
-    Rule rule;
-    rule.head = {
-        new RuleAtom(A2, 0, {}),
-    };
-    rule.head[0]->link = {RuleLink(NULL, 1), RuleLink(NULL, 0)};
-    rule.freelink_num = 2;
-    rule.connect = {{0,1}};
-    return rule;
-}
-/* ---------------------------------------------------------- */
-
-// a,a,a,...,a.
-void make_many_a(int n) {
-    for (int i = 0; i < n; i++) {
-        new Atom(A0);
-    }
-}
-
-// a,a :- b.
-Rule make_a_a_to_b_rule() {
-    Rule rule;
-    rule.head = {
-        new RuleAtom(A0, 0, {}),
-        new RuleAtom(A0, 1, {}),
-    };
-    rule.freelink_num = 0;
-    rule.body = {
-        new RuleAtom(B0, 0, {}),
-    };
-    return rule;
-}
-
-/* ---------------------------------------------------------- */
-
-
-
-int main(void) {
-    // init
-
-    // make_XabaaaaabaaaX_graph(100000);
-    // rulelist = { make_aba_rule() };
-
-    make_baaab_graph(10000000);
-    // rulelist = { make_aa_to_a_rule() };
-    rulelist = { make_a_to_XY_rule() };
-
-    // make_many_a(10000000);
-    // rulelist = { make_a_a_to_b_rule() };
-
+void show_graph() {
+    map<pair<Atom*, int>, string> mp;
     for (auto al : atomlist) {
+        Functor functor = al.first;
+        auto &list = al.second;
+        cout << functor << " size = " << list.size() << endl;
+    }
+}
+
+void nest_dump(Atom* atom, int depth, unordered_set<Atom*> &dumped_atoms, map<Link, int> &locallink_id) {
+    
+    dumped_atoms.insert(atom);
+    Functor &functor = atom->functor;
+    cout << functor.name;
+    int args = functor.arity + (depth > 0 ? -1 : 0);
+    if (args == 0) return;
+    cout << "(";
+    for (int i = 0; i < args; i++) {
+        if (locallink_id.find(atom->link[i]) != locallink_id.end()) {
+            cout << "L" << locallink_id[atom->link[i]];
+        } else {
+            Atom *dst_atom = atom->link[i].atom;
+            int dst_pos = atom->link[i].pos;
+            if (dst_atom->functor.arity == dst_pos + 1 && 
+                depth < 10000 &&
+                dumped_atoms.find(dst_atom) == dumped_atoms.end())
+            {
+                nest_dump(dst_atom, depth+1, dumped_atoms, locallink_id);
+            } else {
+                int id = locallink_id.size();
+                locallink_id[Link(atom, i)] = id;
+                cout << "L" << id;
+            }
+        }
+        if (i < args-1) cout << ",";
+    }
+    cout << ")";
+}
+
+
+void dump() {
+    vector<pair<int,Functor>> size_functor_pairs;
+    for (auto &itr : atomlist) {
+        size_functor_pairs.push_back({itr.second.size(), itr.first});
+    }
+    sort(size_functor_pairs.begin(), size_functor_pairs.end());
+    unordered_set<Atom*> dumped_atoms;
+    map<Link, int> locallink_id;
+    for (pair<int,Functor> &p : size_functor_pairs) {
+        Functor &functor = p.second;
+        for (Atom* atom : atomlist[functor]) {
+            if (dumped_atoms.find(atom) == dumped_atoms.end()) {
+                nest_dump(atom, 0, dumped_atoms, locallink_id);
+                cout << ". ";
+            }
+        }
+    }
+    cout << endl;
+}
+
+void show_atomlist_size() {
+    cout << "------------ atom list size ------------" << endl;
+    for (auto &al : atomlist) {
         cout << al.first << " size = " << al.second.size() << endl;
     }
+}
 
-    // execute rule
+void show_rules() {
+    int R = rulelist.size();
+    for (int i = 0; i < R; i++) {
+        printf("------------ Rule %d ------------\n", i);
+        rulelist[i].show();
+    }
+}
+
+int main(void) {
+    parse();
+    // show_rules();
     while (true) {
         bool success = false;
         for (Rule &rule : rulelist) {
@@ -373,12 +298,8 @@ int main(void) {
         }
         if (!success) break;
     }
-    debug(num_rules_success);
-
-    for (auto al : atomlist) {
-        cout << al.first << " size = " << al.second.size() << endl;
-    }
-
+    // debug(num_rules_success);
+    dump();
     return 0;
 }
 

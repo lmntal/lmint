@@ -1,3 +1,6 @@
+#ifndef RULE_HPP
+#define RULE_HPP
+
 #include <iostream>
 using std::cin;
 using std::cout;
@@ -12,6 +15,8 @@ using std::string;
 #include <map>
 using std::map;
 using std::pair;
+#include <unordered_set>
+using std::unordered_set;
 #include <list>
 using std::list;
 #include <algorithm>
@@ -30,8 +35,9 @@ class Guard;
 class Register;
 class Rule;
 
-map<Functor,list<Atom*>> atomlist;
-vector<Rule> rulelist;
+extern map<Functor,list<Atom*>> atomlist;
+extern vector<Rule> rulelist;
+
 
 class Functor {
   public:
@@ -42,17 +48,17 @@ class Functor {
     ~Functor() {}
     Functor(int a, string n): arity(a),name(n) {}
 
-    bool operator==(const Functor r) const {
+    bool operator==(const Functor &r) const {
         return arity == r.arity && name == r.name;
     }
-    bool operator!=(const Functor r) const {
+    bool operator!=(const Functor &r) const {
         return arity != r.arity || name != r.name;
     }
-    bool operator<(const Functor r) const {
+    bool operator<(const Functor &r) const {
         return name != r.name ? name < r.name : arity < r.arity;
     }
 
-    friend ostream& operator<<(ostream& ost, const Functor& r) {
+    friend ostream& operator<<(ostream& ost, const Functor &r) {
         ost << "<" << r.name << "," << r.arity << ">";
         return ost;
     }
@@ -66,6 +72,10 @@ class Link {
     Link() {}
     ~Link() {}
     Link(Atom *a, int p): atom(a), pos(p) {}
+
+    bool operator<(const Link &r) const {
+        return atom != r.atom ? atom < r.atom : pos < r.pos;
+    }
 };
 
 class Atom {
@@ -93,6 +103,7 @@ class RuleLink {
 
     RuleLink() {}
     ~RuleLink() {}
+    RuleLink(int p): atom(NULL), pos(p) {}
     RuleLink(RuleAtom *a, int p): atom(a), pos(p) {}
     bool is_freelink() {
         return atom == NULL;
@@ -112,6 +123,10 @@ class RuleAtom{
 
     RuleAtom() {}
     ~RuleAtom() {}
+    RuleAtom(Functor f, int i): functor(f), id(i) {
+        link.resize(functor.arity);
+    }
+
     RuleAtom(Functor f, int i, vector<RuleLink> l):
         functor(f), id(i), link(l) {}
 
@@ -129,9 +144,37 @@ class Rule {
     vector<RuleAtom*> head;
     vector<Guard> gurad;
     vector<RuleAtom*> body;
-    vector<pair<int,int>> connect;
-    Rule() {}
+    vector<pair<int,int>> connector;
+    Rule(): freelink_num(0) {}
     ~Rule() {}
+
+    void show() {
+        cout << "----------- head -----------" << endl;
+        for (int i = 0; i < (int)head.size(); i++) {
+            cout << head[i]->functor << " [" << head[i] << "] (";
+            int arity = (int)head[i]->functor.arity;
+            for (int j = 0; j < arity; j++) {
+                cout << ((head[i]->link[j].is_freelink()) ? "FL:" : "LL:")
+                     << head[i]->link[j].atom << "(" << head[i]->link[j].pos << ")"
+                     << (j + 1 == arity ? "" : ", ");
+            }
+            cout << ")" << endl;
+        }
+        cout << "----------- body -----------" << endl;
+        for (int i = 0; i < (int)body.size(); i++) {
+            cout << body[i]->functor << " [" << body[i] << "] (";
+            int arity = (int)body[i]->functor.arity;
+            for (int j = 0; j < arity; j++) {
+                cout << ((body[i]->link[j].is_freelink()) ? "FL:" : "LL:")
+                     << body[i]->link[j].atom << "(" << body[i]->link[j].pos << ")"
+                     << (j + 1 == arity ? "" : ", ");
+            }
+            cout << ")" << endl;
+        }
+        for (auto &p : connector) {
+            cout << p.first << " = " << p.second << endl;
+        }
+    }
 };
 
 class Register {
@@ -148,3 +191,11 @@ class Register {
         freelink.resize(rule.freelink_num);
     }
 };
+
+
+bool find_atom(Rule &rule, Register &reg);
+bool set_atom_to_reg(Rule &rule, Register &reg, Atom* atom, int hi);
+void remove_atom_from_reg(Rule &rule, Register &reg, Atom* atom, int hi);
+void rewrite(Rule &rule, Register &reg);
+
+#endif
