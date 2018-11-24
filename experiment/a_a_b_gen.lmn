@@ -1,0 +1,7 @@
+gen(PARAMETER).
+
+gen(N)
+:- N>0, N1 = N-1
+| a, gen(N1).
+
+gen(0):- .

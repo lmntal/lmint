@@ -1,0 +1,11 @@
+front(tail(PARAMETER, 0)).
+// front(tail(100000, 0)).
+Ret = tail(N, 0)
+:- N>0, N1 = N-1
+| Ret = b(tail(N1, integer.rnd(10))).
+
+Ret = tail(N, X) 
+:- N>0, N1 = N-1, X>0
+| Ret = a(tail(N1, integer.rnd(10))).
+
+Ret = tail(0, X) :- int(X) | Ret = tail.

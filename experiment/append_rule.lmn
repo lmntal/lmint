@@ -1,0 +1,2 @@
+Pre = append(nil,List) :- Pre = List.
+Pre = append(c(V,Next),List) :- Pre = c(V,append(Next,List)).

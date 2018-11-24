@@ -1,0 +1,3 @@
+ans = append(gen(PARAMETER),gen(10)).
+Ret = gen(N) :- N > 0, N1 = N - 1 | Ret = c(x, gen(N1)).
+Ret = gen(0) :- Ret = nil.
