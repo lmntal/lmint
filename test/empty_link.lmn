@@ -1,0 +1,4 @@
+L = L.
+X = Y, Y = X.
+A = B, B = C, C = A.
+// -> empty
