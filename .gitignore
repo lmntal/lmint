@@ -1,7 +1,7 @@
 lmntal-interpreter
 ignored/
-demo/
-lmntal-code/
+demo
+lmntal-code
 
 
 # Created by https://www.gitignore.io/api/c++,macos,sublimetext
