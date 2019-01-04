@@ -72,6 +72,7 @@ Parser read_sentences(vector<string> &raw_inputs, int &y, int &x) {
     while (y < (int)raw_inputs.size()) {
         TopSet topset = read_topset(raw_inputs, y, x);
 
+        // マクロにスコープはない？！ -> lambda式
         #define append(a, b) a.insert(a.end(), b.begin(), b.end())
         // Graph
         if (read_token(raw_inputs, y, x, ".")) {
@@ -81,8 +82,14 @@ Parser read_sentences(vector<string> &raw_inputs, int &y, int &x) {
         }
         // Rule
         else if (read_token(raw_inputs, y, x, ":-")) {
-            parser.rule_head.push_back(topset);
-            parser.rule_body.push_back(read_topset(raw_inputs, y, x));
+            PrsGuard guard;
+            int preY = y, preX = x;
+            if (read_guard(raw_inputs, y, x, guard)) {
+                parser.rule.push_back(PrsRule(topset, guard, read_topset(raw_inputs, y, x)));
+            } else {
+                y = preY, x = preX;
+                parser.rule.push_back(PrsRule(topset, read_topset(raw_inputs, y, x)));
+            }
             if (!read_token(raw_inputs, y, x, ".")) {
                 syntax_error(raw_inputs, y, x, "Unexpected Token");
             }
@@ -151,14 +158,14 @@ TopSet read_topset(vector<string> &raw_inputs, int &y, int &x) {
 Result_of_nest read_nest(vector<string> &raw_inputs, int &y, int &x, TopSet &topset) {
 
     // Link
-    if (isupper(raw_inputs[y][x])){
+    if (is_link_initial(raw_inputs[y][x])) {
         string cur_link = read_name(raw_inputs, y, x);
         read_ignore(raw_inputs, y, x);
         return Result_of_nest(cur_link);
     }
 
     // Atom | Atom '(' ')' | Atom '(' Nest {',' Nest} ')'
-    else if (is_atom_initial(raw_inputs[y][x])) {
+    else if (is_atom_initial(raw_inputs[y][x]) || isdigit(raw_inputs[y][x])) {
         int atom_id = topset.add_atom(read_name(raw_inputs, y, x));
 
         // Atom '(' ')' | Atom '(' Nest {',' Nest} ')'
@@ -202,6 +209,127 @@ Result_of_nest read_nest(vector<string> &raw_inputs, int &y, int &x, TopSet &top
     assert(false);
 }
 
+// Gurad := (TypeCheck | Compare) {',' (TypeCheck | Compare)}
+// TypeCheck := Type '(' Link ')'
+// Type := int | unary
+// Compare := Exp COP Exp
+// COP := '=:=' | '=\=' | '<' | '=<' | '>' | '>='
+// AOP := '+' | '-' | '*' | '/' | 'mod'
+// Exp := Factor { AOP Factor }
+// Factor := Link | Num | '(' Exp ')' | ('+'|'-') Factor
+// Num := [0-9]+
+
+// これらには、読むのに失敗したらy,xを戻して欲しい
+
+// 失敗したら begin_zとbegin_yに戻るやつ、read_guardする前に覚えておけば良いのでは？
+// 返すときにすることではないのでは？ てか参照渡しが綺麗なのでは？
+
+
+bool read_factor(vector<string> &raw_inputs, int &y, int &x, vector<string> &tokens) {
+    if (is_link_initial(raw_inputs[y][x])) {
+        tokens.push_back(read_name(raw_inputs, y, x));
+        return true;
+    } else if (isdigit(raw_inputs[y][x])) {
+        tokens.push_back(read_number(raw_inputs, y, x));
+        return true;
+    } else if (read_token(raw_inputs, y, x, "(")) {
+        tokens.push_back("(");
+        if (!read_exp(raw_inputs, y, x, tokens)) return false;
+        if (!read_token(raw_inputs, y, x, ")")) return false;
+        tokens.push_back(")");
+        return true;
+    } else if (read_token(raw_inputs, y, x, "+")) {
+        tokens.push_back("+");
+        return read_factor(raw_inputs, y, x, tokens);
+    } else if (read_token(raw_inputs, y, x, "-")) {
+        tokens.push_back("-");
+        return read_factor(raw_inputs, y, x, tokens);
+    } else {
+        return false;
+    }
+}
+
+bool read_exp(vector<string> &raw_inputs, int &y, int &x, vector<string> &tokens) {
+    while (true) {
+        if (!read_factor(raw_inputs, y, x, tokens)) {
+            return false;
+        }
+        bool finish = true;
+        vector<string> arith_ops = { "+", "-", "*", "/", "mod" };
+        for (string &op : arith_ops) {
+            if (read_token(raw_inputs, y, x, op)) {
+                tokens.push_back(op);
+                finish = false;
+                break;
+            }
+        }
+        if (finish) break;
+    }
+    return true;
+}
+
+
+bool read_type_check(vector<string> &raw_inputs, int &y, int &x, PrsGuard::TypeCheck &type_check) {
+    vector<string> types = { "int", "unary" };
+    bool ok = false;
+    for (string &type : types) {
+        if (read_token(raw_inputs, y, x, type)) {
+            type_check.type = type;
+            ok = true;
+            break;
+        }
+    }
+    if (!ok) return false;
+    if (!read_token(raw_inputs, y, x, "(")) return false;
+    if (is_link_initial(raw_inputs[y][x])) {
+        type_check.link = read_name(raw_inputs, y, x);
+    } else {
+        return false;
+    }
+    if (!read_token(raw_inputs, y, x, ")")) return false;
+    return true;
+}
+
+bool read_compare(vector<string> &raw_inputs, int &y, int &x, PrsGuard::Compare &compare) {
+    if (!read_exp(raw_inputs, y, x, compare.left_exp)) return false;
+    vector<string> compare_ops = { "=:=", "=\\=", "<", "=<", ">", ">=" };
+    bool ok = false;
+    for (string &op : compare_ops) {
+        if (read_token(raw_inputs, y, x, op)) {
+            ok = true;
+            compare.op = op;
+            break;
+        }
+    }
+    if (!ok) return false;
+    if (!read_exp(raw_inputs, y, x, compare.right_exp)) return false;
+    return true;
+}
+
+bool read_guard(vector<string> &raw_inputs, int &y, int &x, PrsGuard &guard) {
+    do {
+        PrsGuard::TypeCheck type_check;
+        int preY = y, preX = x;
+        if (read_type_check(raw_inputs, y, x, type_check)) {
+            guard.type_check.push_back(type_check);
+            continue;
+        }
+        y = preY, x = preX;
+        PrsGuard::Compare compare;
+        if (read_compare(raw_inputs, y, x, compare)) {
+            guard.compare.push_back(compare);
+            continue;
+        }
+        return false;
+    } while (read_token(raw_inputs, y, x, ","));
+
+    if (read_token(raw_inputs, y, x, "|")) {
+        return true;
+    } else {
+        return false;
+    }
+}
+
 
 //  Link := [A-Z_][a-zA-Z_0-9]*
 bool is_link_initial(char c) {
@@ -215,7 +343,7 @@ bool is_atom_initial(char c) {
 }
 
 
-//  Atom := [a-z][a-zA-Z_0-9]*
+//  Atom := [a-z][a-zA-Z_0-9]* | ''' [^']+ ''' | [0-9]+
 //  Link := [A-Z_][a-zA-Z_0-9]*
 string read_name(vector<string> &raw_inputs, int &y, int &x) {
     string name;
@@ -243,6 +371,24 @@ string read_name(vector<string> &raw_inputs, int &y, int &x) {
             }
         }
     }
+    read_ignore(raw_inputs, y, x);
+    return name;
+}
+
+
+// Num := [0-9]+
+string read_number(vector<string> &raw_inputs, int &y, int &x) {
+    string name;
+    while (x < (int)raw_inputs[y].size()) {
+        char c = raw_inputs[y][x];
+        if (isdigit(c)) {
+            name += c;
+            x++;
+        } else {
+            break;
+        }
+    }
+
     read_ignore(raw_inputs, y, x);
     return name;
 }
@@ -282,8 +428,8 @@ void check_link_num_of_graph(TopSet &topset) {
 }
 
 
-void check_link_num_of_rule(int rule_id, TopSet &head, TopSet &body) {
-    for (auto &itr : head.link_port) {
+void check_link_num_of_rule(int rule_id, PrsRule rule) {
+    for (auto &itr : rule.head.link_port) {
         string link_name = itr.first;
         vector<TopSet::Link> &link_port = itr.second;
         if ((int)link_port.size() > 2) {
@@ -292,7 +438,7 @@ void check_link_num_of_rule(int rule_id, TopSet &head, TopSet &body) {
                  << " appears more than twice" << endl;
             exit(1);
         }
-        if ((int)link_port.size() == 1 && (int)body.link_port[link_name].size() != 1) {
+        if ((int)link_port.size() == 1 && (int)rule.body.link_port[link_name].size() != 1) {
             cerr << "Semantic Error: link " << link_name
                  << " in head of rule " << rule_id
                  << " is free variable" << endl;
@@ -300,7 +446,7 @@ void check_link_num_of_rule(int rule_id, TopSet &head, TopSet &body) {
         }
     }
 
-    for (auto &itr : body.link_port) {
+    for (auto &itr : rule.body.link_port) {
         string link_name = itr.first;
         vector<TopSet::Link> &link_port = itr.second;
         if ((int)link_port.size() > 2) {
@@ -309,7 +455,7 @@ void check_link_num_of_rule(int rule_id, TopSet &head, TopSet &body) {
                  << " appears more than twice" << endl;
             exit(1);
         }
-        if ((int)link_port.size() == 1 && (int)head.link_port[link_name].size() != 1) {
+        if ((int)link_port.size() == 1 && (int)rule.head.link_port[link_name].size() != 1) {
             cerr << "Semantic Error: link " << link_name
                  << " in body of rule " << rule_id
                  << " is free variable" << endl;
@@ -363,19 +509,19 @@ void set_graph(TopSet &graph) {
 }
 
 
-void set_rule(TopSet &head, TopSet &body) {
+void set_rule(PrsRule &parser_rule) {
 
     Rule rule;
-    int head_atom_num = head.atom_name.size();
-    int body_atom_num = body.atom_name.size();
+    int head_atom_num = parser_rule.head.atom_name.size();
+    int body_atom_num = parser_rule.body.atom_name.size();
     vector<RuleAtom*> head_atoms(head_atom_num);
     vector<RuleAtom*> body_atoms(body_atom_num);
     for (int i = 0; i < head_atom_num; i++) {
-        Functor functor(head.atom_args[i].size(), head.atom_name[i]);
+        Functor functor(parser_rule.head.atom_args[i].size(), parser_rule.head.atom_name[i]);
         head_atoms[i] = new RuleAtom(functor, i);
     }
     for (int i = 0; i < body_atom_num; i++) {
-        Functor functor(body.atom_args[i].size(), body.atom_name[i]);
+        Functor functor(parser_rule.body.atom_args[i].size(), parser_rule.body.atom_name[i]);
         body_atoms[i] = new RuleAtom(functor, i);
     }
 
@@ -383,17 +529,17 @@ void set_rule(TopSet &head, TopSet &body) {
     for (int i = 0; i < head_atom_num; i++) {
         Functor functor = head_atoms[i]->functor;
         for (int j = 0; j < functor.arity; j++) {
-            string link_name = head.atom_args[i][j];
+            string link_name = parser_rule.head.atom_args[i][j];
             TopSet::Link myself(false, i, j);
-            TopSet::Link &to_link = follow_link(head, myself, link_name);
+            TopSet::Link &to_link = follow_link(parser_rule.head, myself, link_name);
 
             // 自由リンク
-            if ((int)head.link_port[link_name].size() == 1) {
+            if ((int)parser_rule.head.link_port[link_name].size() == 1) {
                 free_link_id[link_name] = rule.freelink_num;
                 head_atoms[i]->link[j] = RuleLink(rule.freelink_num);
                 rule.freelink_num++;
             } else if (to_link.is_connector) {
-                string to_name = (to_link.pos == 1) ? head.connect[to_link.id].first : head.connect[to_link.id].second;
+                string to_name = (to_link.pos == 1) ? parser_rule.head.connect[to_link.id].first : parser_rule.head.connect[to_link.id].second;
                 free_link_id[to_name] = rule.freelink_num;
                 head_atoms[i]->link[j] = RuleLink(rule.freelink_num);
                 rule.freelink_num++;
@@ -408,15 +554,15 @@ void set_rule(TopSet &head, TopSet &body) {
     for (int i = 0; i < body_atom_num; i++) {
         Functor functor = body_atoms[i]->functor;
         for (int j = 0; j < functor.arity; j++) {
-            string link_name = body.atom_args[i][j];
+            string link_name = parser_rule.body.atom_args[i][j];
             TopSet::Link myself(false, i, j);
-            TopSet::Link &to_link = follow_link(body, myself, link_name);
+            TopSet::Link &to_link = follow_link(parser_rule.body, myself, link_name);
 
             // 自由リンク
-            if ((int)body.link_port[link_name].size() == 1) {
+            if ((int)parser_rule.body.link_port[link_name].size() == 1) {
                 body_atoms[i]->link[j] = RuleLink(free_link_id[link_name]);
             } else if (to_link.is_connector) {
-                string to_name = (to_link.pos == 1) ? body.connect[to_link.id].first : body.connect[to_link.id].second;
+                string to_name = (to_link.pos == 1) ? parser_rule.body.connect[to_link.id].first : parser_rule.body.connect[to_link.id].second;
                 body_atoms[i]->link[j] = RuleLink(free_link_id[to_name]);
             }
             // 局所リンク
@@ -427,23 +573,49 @@ void set_rule(TopSet &head, TopSet &body) {
     }
 
     // connector
-    for (pair<string,string> &connector : body.connect) {
+    for (pair<string,string> &connector : parser_rule.body.connect) {
         string link_name1 = connector.first;
         string link_name2 = connector.second;
         TopSet::Link null_link(true, -1, -1);
-        if ((int)body.link_port[link_name1].size() == 1) {
-            TopSet::Link &to_link = follow_link(body, null_link, link_name1);
+        if ((int)parser_rule.body.link_port[link_name1].size() == 1) {
+            TopSet::Link &to_link = follow_link(parser_rule.body, null_link, link_name1);
             if (to_link.is_connector) {
-                string to_name = (to_link.pos == 1) ? body.connect[to_link.id].first : body.connect[to_link.id].second;
+                string to_name = (to_link.pos == 1) ? parser_rule.body.connect[to_link.id].first : parser_rule.body.connect[to_link.id].second;
                 rule.connector.push_back({free_link_id[link_name1], free_link_id[to_name]});
             }
-        } else if ((int)body.link_port[link_name2].size() == 1) {
-            TopSet::Link &to_link = follow_link(body, null_link, link_name2);
+        } else if ((int)parser_rule.body.link_port[link_name2].size() == 1) {
+            TopSet::Link &to_link = follow_link(parser_rule.body, null_link, link_name2);
             if (to_link.is_connector) {
-                string to_name = (to_link.pos == 1) ? body.connect[to_link.id].first : body.connect[to_link.id].second;
+                string to_name = (to_link.pos == 1) ? parser_rule.body.connect[to_link.id].first : parser_rule.body.connect[to_link.id].second;
                 rule.connector.push_back({free_link_id[link_name2], free_link_id[to_name]});
             }
         }
+    }
+
+    for (auto &tc : parser_rule.guard.type_check) {
+        if (free_link_id.find(tc.link) != free_link_id.end()) {
+            tc.link = "#" + to_string(free_link_id[tc.link]);
+        }
+    }
+    for (auto &c : parser_rule.guard.compare) {
+        for (string &token : c.left_exp) {
+            if (free_link_id.find(token) != free_link_id.end()) {
+                token = "#" + to_string(free_link_id[token]);
+            }
+        }
+        for (string &token : c.right_exp) {
+            if (free_link_id.find(token) != free_link_id.end()) {
+                token = "#" + to_string(free_link_id[token]);
+            }
+        }
+    }
+
+    // rule.guard = parser_rule.guard;
+    for (auto &type_check : parser_rule.guard.type_check) {
+        rule.guard.type_check.emplace_back(type_check.link, type_check.type);
+    }
+    for (auto &compare : parser_rule.guard.compare) {
+        rule.guard.compare.emplace_back(compare.left_exp, compare.op, compare.right_exp);
     }
     rule.head = head_atoms;
     rule.body = body_atoms;
@@ -458,17 +630,17 @@ void parse() {
     // parser.show();
 
     build_link_port(parser.graph);
-    check_link_num_of_graph(parser.graph);
+    // check_link_num_of_graph(parser.graph);
     
-    int rule_num = parser.rule_head.size();
+    int rule_num = parser.rule.size();
     for (int i = 0; i < rule_num; i++) {
-        build_link_port(parser.rule_head[i]);
-        build_link_port(parser.rule_body[i]);
-        check_link_num_of_rule(i, parser.rule_head[i], parser.rule_body[i]);
+        build_link_port(parser.rule[i].head);
+        build_link_port(parser.rule[i].body);
+        // check_link_num_of_rule(i, parser.rule[i]);
     }
 
     set_graph(parser.graph);
     for (int i = 0; i < rule_num; i++) {
-        set_rule(parser.rule_head[i], parser.rule_body[i]);
+        set_rule(parser.rule[i]);
     }
 }

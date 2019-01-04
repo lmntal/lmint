@@ -54,6 +54,9 @@ class Functor {
     bool operator!=(const Functor &r) const {
         return arity != r.arity || name != r.name;
     }
+    bool is_int() const {
+        return isdigit(name[0]);
+    }
     bool operator<(const Functor &r) const {
         return name != r.name ? name < r.name : arity < r.arity;
     }
@@ -94,6 +97,9 @@ class Atom {
         atomlist[functor].push_front(this);
         itr = atomlist[functor].begin();
     }
+    bool is_int() {
+        return functor.arity == 1 && isdigit(functor.name[0]);
+    }
 };
 
 class RuleLink {
@@ -132,17 +138,54 @@ class RuleAtom{
 
 };
 
+
 class Guard{
   public:
-    string function;
-    vector<string> variable;
+
+    class Compare{
+      public:
+
+        vector<string> left_exp;
+        string op;
+        vector<string> right_exp;
+        
+        Compare() {}
+        ~Compare() {}
+        Compare(vector<string> &left_exp_, string &op_, vector<string> &right_exp_):
+            left_exp(left_exp_), op(op_), right_exp(right_exp_) {}
+        bool is_null() {
+            return op == "";
+        }
+    };
+
+    class TypeCheck{
+      public:
+        string link;
+        string type;
+        TypeCheck() {}
+        ~TypeCheck() {}
+        TypeCheck(string link_, string type_): link(link_), type(type_) {}
+        bool is_null() {
+            return type == "";
+        }
+    };
+
+    vector<TypeCheck> type_check;
+    vector<Compare> compare;
+    Guard() {}
+    ~Guard() {}
+    bool is_null() {
+        return type_check.empty() && compare.empty();
+    }
 };
+
 
 class Rule {
   public:
     int freelink_num;
     vector<RuleAtom*> head;
-    vector<Guard> gurad;
+    // vector<Guard> gurad;
+    Guard guard;
     vector<RuleAtom*> body;
     vector<pair<int,int>> connector;
     Rule(): freelink_num(0) {}
@@ -177,6 +220,8 @@ class Rule {
     }
 };
 
+
+
 class Register {
   public:
     vector<Atom*> head;
@@ -190,6 +235,7 @@ class Register {
         body.resize(rule.body.size());
         freelink.resize(rule.freelink_num);
     }
+
 };
 
 

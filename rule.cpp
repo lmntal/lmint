@@ -5,6 +5,118 @@ map<Functor,list<Atom*>> atomlist;
 vector<Rule> rulelist;
 
 /*
+    TOP := '+' | '-'
+    FOP := '*' | '/' | 'mod'
+    Exp := Term { TOP Term }
+    Term := Factor { FOP Factor }
+    Factor := Link | Num | '(' Exp ')' | TOP Factor
+    Num := [0-9]+
+*/
+
+int eval_exp(Rule &rule, Register &reg, vector<string> &tokens, int &i);
+
+
+int eval_factor(Rule &rule, Register &reg, vector<string> &tokens, int &i) {
+    if (tokens[i][0] == '#') {
+        int free_link_id = std::stoi(tokens[i].substr(1));
+        i++;
+        return std::stoi(reg.freelink[free_link_id].atom->functor.name);
+    }
+
+    if (isdigit(tokens[i][0])) {
+        int result = std::stoi(tokens[i]);
+        i++;
+        return result;
+    }
+
+    if (tokens[i] == "(") {
+        i++;
+        int exp = eval_exp(rule, reg, tokens, i);
+        assert(tokens[i] == ")");
+        i++;
+        return exp;
+    }
+
+    if (tokens[i] == "+") {
+        i++;
+        return eval_factor(rule, reg, tokens, i);
+    }
+
+    if (tokens[i] == "-") {
+        i++;
+        return - eval_factor(rule, reg, tokens, i);
+    }
+
+    assert(false);
+}
+
+int eval_term(Rule &rule, Register &reg, vector<string> &tokens, int &i) {
+    int result = eval_factor(rule, reg, tokens, i);
+    while (true) {
+        if ((int)tokens.size() == i) break;
+        if (tokens[i] != "*" && tokens[i] != "/") break;
+        string op = tokens[i];
+        i++;
+        int term = eval_factor(rule, reg, tokens, i);
+        if (op == "*") {
+            result *= term;
+        } else if (op == "/") {
+            result /= term;
+        } else {
+            assert(false);
+        }
+    }
+    return result;
+}
+
+int eval_exp(Rule &rule, Register &reg, vector<string> &tokens, int &i) {
+    int result = eval_term(rule, reg, tokens, i);
+    while (true) {
+        if ((int)tokens.size() == i) break;
+        if (tokens[i] != "+" && tokens[i] != "-") break;
+        string op = tokens[i];
+        i++;
+        int term = eval_term(rule, reg, tokens, i);
+        if (op == "+") {
+            result += term;
+        } else if (op == "-") {
+            result -= term;
+        } else {
+            assert(false);
+        }
+    }
+    return result;
+}
+
+bool eval_compare(int left_exp, string &op, int right_exp) {
+    if (op == "=:=") return left_exp == right_exp;
+    if (op == "=\\=") return left_exp != right_exp;
+    if (op == "<") return left_exp < right_exp;
+    if (op == "=<") return left_exp <= right_exp;
+    if (op == ">") return left_exp > right_exp;
+    if (op == ">=") return left_exp >= right_exp;
+    assert(false);
+}
+
+bool guard_check(Rule &rule, Register &reg) {
+    for (auto &c : rule.guard.compare) {
+        
+        // TODO: リンクがすべてintであることを確認
+
+        int i = 0;
+        int left_exp = eval_exp(rule, reg, c.left_exp, i);
+
+        i = 0;
+        int right_exp = eval_exp(rule, reg, c.right_exp, i);
+
+        if (!eval_compare(left_exp, c.op, right_exp)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+/*
     ルール内の未決定のアトムを1つ選び、
     それにマッチするアトムをグラフの中から1つ選びレジスタに格納する
 */
@@ -21,7 +133,7 @@ bool find_atom(Rule &rule, Register &reg) {
         }
     }
     if (hi == -1) {
-        return true;
+        return guard_check(rule, reg);
     } else {
         Functor functor = rule.head[hi]->functor;
         for (auto &atom : atomlist[functor]) {
@@ -260,6 +372,7 @@ void dump() {
     map<Link, int> locallink_id;
     for (pair<int,Functor> &p : size_functor_pairs) {
         Functor &functor = p.second;
+        if (functor.is_int()) continue;
         for (Atom* atom : atomlist[functor]) {
             if (dumped_atoms.find(atom) == dumped_atoms.end()) {
                 nest_dump(atom, 0, dumped_atoms, locallink_id);
