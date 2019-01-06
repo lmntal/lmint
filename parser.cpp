@@ -2,6 +2,151 @@
 
 int TopSet::orig_local_link_num = 0;
 
+
+TopSet::Link::Link() {}
+
+TopSet::Link::~Link() {}
+
+TopSet::Link::Link(bool is_connector_, int id_, int pos_):
+    is_connector(is_connector_), id(id_), pos(pos_) {}
+
+bool TopSet::Link::operator==(const Link rhs) const {
+    return is_connector == rhs.is_connector && id == rhs.id && pos == rhs.pos;
+}
+
+ostream& operator<<(ostream& ost, const TopSet::Link &rhs) {
+    ost << "<" << (rhs.is_connector ? "( = ) " : "(...) ") << rhs.id << "," << rhs.pos << ">";
+    return ost;
+}
+
+
+TopSet::TopSet() {}
+
+TopSet::~TopSet() {}
+
+int TopSet::add_atom(string atom) {
+    atom_name.push_back(atom);
+    int atom_id = atom_args.size();
+    atom_args.resize(atom_id + 1);
+    return atom_id;
+}
+
+string TopSet::make_orig_local_link_num() {
+    return "#" + to_string(orig_local_link_num++);
+}
+
+void TopSet::show() {
+    for (int i = 0; i < (int)atom_name.size(); i++) {
+        cout << atom_name[i] << "(";
+        int arity = (int)atom_args[i].size();
+        for (int j = 0; j < arity; j++) {
+            cout << atom_args[i][j] 
+                 << (j + 1 == arity ? "" : ", ");
+        }
+        cout << ")" << endl;
+    }
+    for (auto &p : connect) {
+        cout << p.first << " = " << p.second << endl;
+    }
+}
+
+
+PrsGuard::Compare::Compare() {}
+
+PrsGuard::Compare::~Compare() {}
+
+PrsGuard::Compare::Compare(
+    vector<string> &left_exp_, string &op_, vector<string> &right_exp_):
+    left_exp(left_exp_), op(op_), right_exp(right_exp_) {}
+
+bool PrsGuard::Compare::is_null() {
+    return op == "";
+}
+
+
+PrsGuard::TypeCheck::TypeCheck() {}
+
+PrsGuard::TypeCheck::~TypeCheck() {}
+
+PrsGuard::TypeCheck::TypeCheck(string link_, string type_): link(link_), type(type_) {}
+
+bool PrsGuard::TypeCheck::is_null() {
+    return type == "";
+}
+
+
+PrsGuard::PrsGuard() {}
+
+PrsGuard::~PrsGuard() {}
+
+bool PrsGuard::is_null() {
+    return type_check.empty() && compare.empty();
+}
+
+void PrsGuard::show() {
+    for (TypeCheck &tc : type_check) {
+        cout << tc.type << ": " << tc.link << ", ";
+    }
+    for (Compare &c : compare) {
+        for (string &token : c.left_exp) {
+            cout << token << " ";
+        }
+        cout << c.op << " ";
+        for (string &token : c.right_exp) {
+            cout << token << " ";
+        }
+        cout << ", ";
+    }
+    cout << endl;
+}
+
+
+PrsRule::PrsRule() {}
+
+PrsRule::~PrsRule() {}
+
+PrsRule::PrsRule(TopSet head_, TopSet body_): head(head_), body(body_) {}
+
+PrsRule::PrsRule(TopSet head_, PrsGuard guard_, TopSet body_):
+    head(head_), body(body_), guard(guard_) {}
+
+
+Parser::Parser() {}
+
+Parser::~Parser() {}
+
+void Parser::show() {
+    // Graph
+    printf("------------ Graph ------------\n");
+    graph.show();
+
+    // Rule
+    // TODD: PrsRuleにshowを書く
+    int R = rule.size();
+    for (int i = 0; i < R; i++) {
+        printf("------------ Rule %d ------------\n", i);
+        rule[i].head.show();
+        cout << " :- " << endl;
+        if (!rule[i].guard.is_null()) {
+            rule[i].guard.show();
+        } 
+        rule[i].body.show();
+    }
+}
+
+
+Result_of_nest::Result_of_nest() {}
+
+Result_of_nest::~Result_of_nest() {}
+
+Result_of_nest::Result_of_nest(string link_name_):
+    is_link(true), link_name(link_name_) {}
+
+Result_of_nest::Result_of_nest(int atom_id_):
+    is_link(false), atom_id(atom_id_) {}
+
+
+
 vector<string> read_istream() {
     vector<string> lines;
     string s;

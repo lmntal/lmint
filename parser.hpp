@@ -35,6 +35,9 @@ using std::min;
 class Parser;
 class TopSet;
 class Result_of_nest;
+class PrsGuard;
+class PrsRule;
+
 
 class TopSet{
   public:
@@ -43,17 +46,12 @@ class TopSet{
         bool is_connector;
         int id;
         int pos;
-        Link() {}
-        ~Link() {}
-        Link(bool is_connector_, int id_, int pos_):
-            is_connector(is_connector_), id(id_), pos(pos_) {}
-        bool operator==(const Link r) const {
-            return is_connector == r.is_connector && id == r.id && pos == r.pos;
-        }
-        friend ostream& operator<<(ostream& ost, const Link& r) {
-            ost << "<" << (r.is_connector ? "( = ) " : "(...) ") << r.id << "," << r.pos << ">";
-            return ost;
-        }
+        Link();
+        ~Link();
+        Link(bool is_connector_, int id_, int pos_);
+
+        bool operator==(const Link rhs) const;
+        friend ostream& operator<<(ostream& ost, const Link &rhs);
     };
 
     static int orig_local_link_num;
@@ -63,35 +61,14 @@ class TopSet{
     vector<pair<string,string>> connect;
     map<string,vector<Link>> link_port;
 
-    TopSet() {}
-    ~TopSet() {}
+    TopSet();
+    ~TopSet();
 
-    int add_atom(string atom) {
-        atom_name.push_back(atom);
-        int atom_id = atom_args.size();
-        atom_args.resize(atom_id + 1);
-        return atom_id;
-    }
-
-    static string make_orig_local_link_num() {
-        return "#" + to_string(orig_local_link_num++);
-    }
-
-    void show() {
-        for (int i = 0; i < (int)atom_name.size(); i++) {
-            cout << atom_name[i] << "(";
-            int arity = (int)atom_args[i].size();
-            for (int j = 0; j < arity; j++) {
-                cout << atom_args[i][j] 
-                     << (j + 1 == arity ? "" : ", ");
-            }
-            cout << ")" << endl;
-        }
-        for (auto &p : connect) {
-            cout << p.first << " = " << p.second << endl;
-        }
-    }
+    int add_atom(string atom);
+    static string make_orig_local_link_num();
+    void show();
 };
+
 
 class PrsGuard{
   public:
@@ -101,52 +78,32 @@ class PrsGuard{
         vector<string> left_exp;
         string op;
         vector<string> right_exp;
-        
-        Compare() {}
-        ~Compare() {}
-        Compare(vector<string> &left_exp_, string &op_, vector<string> &right_exp_):
-            left_exp(left_exp_), op(op_), right_exp(right_exp_) {}
-        bool is_null() {
-            return op == "";
-        }
-        
+
+        Compare();
+        ~Compare();
+        Compare(vector<string> &left_exp_, string &op_, vector<string> &right_exp_);
+        bool is_null();
     };
 
     class TypeCheck{
       public:
         string link;
         string type;
-        TypeCheck() {}
-        ~TypeCheck() {}
-        TypeCheck(string link_, string type_): link(link_), type(type_) {}
-        bool is_null() {
-            return type == "";
-        }
+
+        TypeCheck();
+        ~TypeCheck();
+        TypeCheck(string link_, string type_);
+        bool is_null();
     };
 
     vector<TypeCheck> type_check;
     vector<Compare> compare;
-    PrsGuard() {}
-    ~PrsGuard() {}
-    bool is_null() {
-        return type_check.empty() && compare.empty();
-    }
-    void show() {
-        for (TypeCheck &tc : type_check) {
-            cout << tc.type << ": " << tc.link << ", ";
-        }
-        for (Compare &c : compare) {
-            for (string &token : c.left_exp) {
-                cout << token << " ";
-            }
-            cout << c.op << " ";
-            for (string &token : c.right_exp) {
-                cout << token << " ";
-            }
-            cout << ", ";
-        }
-        cout << endl;
-    }
+
+    PrsGuard();
+    ~PrsGuard();
+
+    bool is_null();
+    void show();
 };
 
 
@@ -155,51 +112,36 @@ class PrsRule{
     TopSet head, body;
     PrsGuard guard;
 
-    PrsRule() {}
-    ~PrsRule() {}
-    PrsRule(TopSet head_, TopSet body_): head(head_), body(body_) {}
-    PrsRule(TopSet head_, PrsGuard guard_, TopSet body_): head(head_), body(body_), guard(guard_) {}
-    
+    PrsRule();
+    ~PrsRule();
+    PrsRule(TopSet head_, TopSet body_);
+    PrsRule(TopSet head_, PrsGuard guard_, TopSet body_);
+
 };
+
 
 class Parser{
   public:
-    // vector<TopSet> rule_head;
-    // vector<TopSet> rule_body;
-    // vector<ParsingGuard> rule_guard;
     TopSet graph;
     vector<PrsRule> rule;
-    Parser() {}
-    ~Parser() {}
-    void show() {
-        // Graph
-        printf("------------ Graph ------------\n");
-        graph.show();
 
-        // Rule
-        // TODD: PrsRuleにshowを書く
-        int R = rule.size();
-        for (int i = 0; i < R; i++) {
-            printf("------------ Rule %d ------------\n", i);
-            rule[i].head.show();
-            cout << " :- " << endl;
-            if (!rule[i].guard.is_null()) {
-                rule[i].guard.show();
-            } 
-            rule[i].body.show();
-        }
-    }
+    Parser();
+    ~Parser();
+
+    void show();
 };
+
 
 class Result_of_nest{
   public:
     bool is_link;
     int atom_id;
     string link_name;
-    Result_of_nest(){}
-    ~Result_of_nest(){}
-    Result_of_nest(string link_name_): is_link(true), link_name(link_name_) {}
-    Result_of_nest(int atom_id_): is_link(false), atom_id(atom_id_) {}
+
+    Result_of_nest();
+    ~Result_of_nest();
+    Result_of_nest(string link_name_);
+    Result_of_nest(int atom_id_);
 };
 
 

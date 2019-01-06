@@ -4,116 +4,181 @@
 map<Functor,list<Atom*>> atomlist;
 vector<Rule> rulelist;
 
-/*
-    TOP := '+' | '-'
-    FOP := '*' | '/' | 'mod'
-    Exp := Term { TOP Term }
-    Term := Factor { FOP Factor }
-    Factor := Link | Num | '(' Exp ')' | TOP Factor
-    Num := [0-9]+
-*/
+Functor::Functor() {}
 
-int eval_exp(Rule &rule, Register &reg, vector<string> &tokens, int &i);
+Functor::~Functor() {}
 
+Functor::Functor(int arity_, string name_): arity(arity_), name(name_) {}
 
-int eval_factor(Rule &rule, Register &reg, vector<string> &tokens, int &i) {
-    if (tokens[i][0] == '#') {
-        int free_link_id = std::stoi(tokens[i].substr(1));
-        i++;
-        return std::stoi(reg.freelink[free_link_id].atom->functor.name);
-    }
-
-    if (isdigit(tokens[i][0])) {
-        int result = std::stoi(tokens[i]);
-        i++;
-        return result;
-    }
-
-    if (tokens[i] == "(") {
-        i++;
-        int exp = eval_exp(rule, reg, tokens, i);
-        assert(tokens[i] == ")");
-        i++;
-        return exp;
-    }
-
-    if (tokens[i] == "+") {
-        i++;
-        return eval_factor(rule, reg, tokens, i);
-    }
-
-    if (tokens[i] == "-") {
-        i++;
-        return - eval_factor(rule, reg, tokens, i);
-    }
-
-    assert(false);
+bool Functor::operator==(const Functor &rhs) const {
+    return arity == rhs.arity && name == rhs.name;
 }
 
-int eval_term(Rule &rule, Register &reg, vector<string> &tokens, int &i) {
-    int result = eval_factor(rule, reg, tokens, i);
-    while (true) {
-        if ((int)tokens.size() == i) break;
-        if (tokens[i] != "*" && tokens[i] != "/") break;
-        string op = tokens[i];
-        i++;
-        int term = eval_factor(rule, reg, tokens, i);
-        if (op == "*") {
-            result *= term;
-        } else if (op == "/") {
-            result /= term;
-        } else {
-            assert(false);
+bool Functor::operator!=(const Functor &rhs) const {
+    return arity != rhs.arity || name != rhs.name;
+}
+
+bool Functor::is_int() const {
+    return isdigit(name[0]);
+}
+
+bool Functor::operator<(const Functor &rhs) const {
+    return name != rhs.name ? name < rhs.name : arity < rhs.arity;
+}
+
+ostream& operator<<(ostream& ost, const Functor &rhs) {
+    ost << "<" << rhs.name << "," << rhs.arity << ">";
+    return ost;
+}
+
+
+Link::Link() {}
+
+Link::~Link() {}
+
+Link::Link(Atom *atom_, int pos_): atom(atom_), pos(pos_) {}
+
+bool Link::operator<(const Link &rhs) const {
+    return atom != rhs.atom ? atom < rhs.atom : pos < rhs.pos;
+}
+
+
+Atom::Atom() {}
+
+Atom::~Atom() {
+    assert(*itr == this);
+    atomlist[functor].erase(itr);
+}
+
+Atom::Atom(Functor functor_): functor(functor_) {
+    link.resize(functor.arity);
+    atomlist[functor].push_front(this);
+    itr = atomlist[functor].begin();
+}
+
+bool Atom::is_int() {
+    return functor.arity == 1 && isdigit(functor.name[0]);
+}
+
+
+RuleLink::RuleLink() {}
+
+RuleLink::~RuleLink() {}
+
+RuleLink::RuleLink(int pos_): atom(NULL), pos(pos_) {}
+
+RuleLink::RuleLink(RuleAtom *atom_, int pos_): atom(atom_), pos(pos_) {}
+
+bool RuleLink::is_freelink() {
+    return atom == NULL;
+}
+
+int RuleLink::freelinkID() {
+    assert(is_freelink());
+    return pos;
+}
+
+
+RuleAtom::RuleAtom() {}
+
+RuleAtom::~RuleAtom() {}
+
+RuleAtom::RuleAtom(Functor functor_, int id_): functor(functor_), id(id_) {
+    link.resize(functor.arity);
+}
+
+RuleAtom::RuleAtom(Functor functor_, int id_, vector<RuleLink> link_):
+    functor(functor_), id(id_), link(link_) {}
+
+
+Guard::Compare::Compare() {}
+
+Guard::Compare::~Compare() {}
+
+Guard::Compare::Compare(vector<string> &left_exp_, string &op_, vector<string> &right_exp_):
+    left_exp(left_exp_), op(op_), right_exp(right_exp_) {}
+
+bool Guard::Compare::is_null() {
+    return op == "";
+}
+
+
+Guard::TypeCheck::TypeCheck() {}
+
+Guard::TypeCheck::~TypeCheck() {}
+
+Guard::TypeCheck::TypeCheck(string link_, string type_): link(link_), type(type_) {}
+
+bool Guard::TypeCheck::is_null() {
+    return type == "";
+}
+
+
+Guard::Guard() {}
+
+Guard::~Guard() {}
+
+bool Guard::is_null() {
+    return type_check.empty() && compare.empty();
+}
+
+
+Rule::Rule(): freelink_num(0) {}
+
+Rule::~Rule() {}
+
+void Rule::show() {
+    cout << "----------- head -----------" << endl;
+    for (int i = 0; i < (int)head.size(); i++) {
+        cout << head[i]->functor << " [" << head[i] << "] (";
+        int arity = (int)head[i]->functor.arity;
+        for (int j = 0; j < arity; j++) {
+            cout << ((head[i]->link[j].is_freelink()) ? "FL:" : "LL:")
+                 << head[i]->link[j].atom << "(" << head[i]->link[j].pos << ")"
+                 << (j + 1 == arity ? "" : ", ");
         }
+        cout << ")" << endl;
     }
-    return result;
-}
-
-int eval_exp(Rule &rule, Register &reg, vector<string> &tokens, int &i) {
-    int result = eval_term(rule, reg, tokens, i);
-    while (true) {
-        if ((int)tokens.size() == i) break;
-        if (tokens[i] != "+" && tokens[i] != "-") break;
-        string op = tokens[i];
-        i++;
-        int term = eval_term(rule, reg, tokens, i);
-        if (op == "+") {
-            result += term;
-        } else if (op == "-") {
-            result -= term;
-        } else {
-            assert(false);
+    cout << "----------- body -----------" << endl;
+    for (int i = 0; i < (int)body.size(); i++) {
+        cout << body[i]->functor << " [" << body[i] << "] (";
+        int arity = (int)body[i]->functor.arity;
+        for (int j = 0; j < arity; j++) {
+            cout << ((body[i]->link[j].is_freelink()) ? "FL:" : "LL:")
+                 << body[i]->link[j].atom << "(" << body[i]->link[j].pos << ")"
+                 << (j + 1 == arity ? "" : ", ");
         }
+        cout << ")" << endl;
     }
-    return result;
+    for (auto &p : connector) {
+        cout << p.first << " = " << p.second << endl;
+    }
 }
 
-bool eval_compare(int left_exp, string &op, int right_exp) {
-    if (op == "=:=") return left_exp == right_exp;
-    if (op == "=\\=") return left_exp != right_exp;
-    if (op == "<") return left_exp < right_exp;
-    if (op == "=<") return left_exp <= right_exp;
-    if (op == ">") return left_exp > right_exp;
-    if (op == ">=") return left_exp >= right_exp;
-    assert(false);
+
+Register::Register() {}
+
+Register::~Register() {}
+
+Register::Register(Rule &rule) {
+    head.resize(rule.head.size());
+    body.resize(rule.body.size());
+    freelink.resize(rule.freelink_num);
 }
 
-bool guard_check(Rule &rule, Register &reg) {
-    for (auto &c : rule.guard.compare) {
-        
-        // TODO: リンクがすべてintであることを確認
 
-        int i = 0;
-        int left_exp = eval_exp(rule, reg, c.left_exp, i);
 
-        i = 0;
-        int right_exp = eval_exp(rule, reg, c.right_exp, i);
 
-        if (!eval_compare(left_exp, c.op, right_exp)) {
-            return false;
-        }
+long long num_rules_success = 0;
+bool try_rule(Rule &rule) {
+    Register reg(rule);
+    if (find_atom(rule,reg)) {
+        rewrite(rule,reg);
+        num_rules_success++;
+        return true;
+    } else {
+        return false;
     }
-    return true;
 }
 
 /*
@@ -245,6 +310,117 @@ void remove_atom_from_reg(Rule &rule, Register &reg, Atom* atom, int hi) {
     }
 }
 
+
+/*
+    TOP := '+' | '-'
+    FOP := '*' | '/' | 'mod'
+    Exp := Term { TOP Term }
+    Term := Factor { FOP Factor }
+    Factor := Link | Num | '(' Exp ')' | TOP Factor
+    Num := [0-9]+
+*/
+
+int eval_factor(Rule &rule, Register &reg, vector<string> &tokens, int &i) {
+    if (tokens[i][0] == '#') {
+        int free_link_id = std::stoi(tokens[i].substr(1));
+        i++;
+        return std::stoi(reg.freelink[free_link_id].atom->functor.name);
+    }
+
+    if (isdigit(tokens[i][0])) {
+        int result = std::stoi(tokens[i]);
+        i++;
+        return result;
+    }
+
+    if (tokens[i] == "(") {
+        i++;
+        int exp = eval_exp(rule, reg, tokens, i);
+        assert(tokens[i] == ")");
+        i++;
+        return exp;
+    }
+
+    if (tokens[i] == "+") {
+        i++;
+        return eval_factor(rule, reg, tokens, i);
+    }
+
+    if (tokens[i] == "-") {
+        i++;
+        return - eval_factor(rule, reg, tokens, i);
+    }
+
+    assert(false);
+}
+
+int eval_term(Rule &rule, Register &reg, vector<string> &tokens, int &i) {
+    int result = eval_factor(rule, reg, tokens, i);
+    while (true) {
+        if ((int)tokens.size() == i) break;
+        if (tokens[i] != "*" && tokens[i] != "/") break;
+        string op = tokens[i];
+        i++;
+        int term = eval_factor(rule, reg, tokens, i);
+        if (op == "*") {
+            result *= term;
+        } else if (op == "/") {
+            result /= term;
+        } else {
+            assert(false);
+        }
+    }
+    return result;
+}
+
+int eval_exp(Rule &rule, Register &reg, vector<string> &tokens, int &i) {
+    int result = eval_term(rule, reg, tokens, i);
+    while (true) {
+        if ((int)tokens.size() == i) break;
+        if (tokens[i] != "+" && tokens[i] != "-") break;
+        string op = tokens[i];
+        i++;
+        int term = eval_term(rule, reg, tokens, i);
+        if (op == "+") {
+            result += term;
+        } else if (op == "-") {
+            result -= term;
+        } else {
+            assert(false);
+        }
+    }
+    return result;
+}
+
+bool eval_compare(int left_exp, string &op, int right_exp) {
+    if (op == "=:=") return left_exp == right_exp;
+    if (op == "=\\=") return left_exp != right_exp;
+    if (op == "<") return left_exp < right_exp;
+    if (op == "=<") return left_exp <= right_exp;
+    if (op == ">") return left_exp > right_exp;
+    if (op == ">=") return left_exp >= right_exp;
+    assert(false);
+}
+
+bool guard_check(Rule &rule, Register &reg) {
+    for (auto &c : rule.guard.compare) {
+        
+        // TODO: リンクがすべてintであることを確認
+
+        int i = 0;
+        int left_exp = eval_exp(rule, reg, c.left_exp, i);
+
+        i = 0;
+        int right_exp = eval_exp(rule, reg, c.right_exp, i);
+
+        if (!eval_compare(left_exp, c.op, right_exp)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+
 void rewrite(Rule &rule, Register &reg) {
     for (Atom* &atom : reg.head) {
         assert(atom != NULL);
@@ -306,19 +482,6 @@ void rewrite(Rule &rule, Register &reg) {
     }
 
 }
-
-long long num_rules_success = 0;
-bool try_rule(Rule &rule) {
-    Register reg(rule);
-    if (find_atom(rule,reg)) {
-        rewrite(rule,reg);
-        num_rules_success++;
-        return true;
-    } else {
-        return false;
-    }
-}
-
 
 /* ----------------------------- dump ----------------------------- */
 

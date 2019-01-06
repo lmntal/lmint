@@ -38,47 +38,34 @@ class Rule;
 extern map<Functor,list<Atom*>> atomlist;
 extern vector<Rule> rulelist;
 
-
 class Functor {
   public:
     int arity;
     string name;
 
-    Functor() {}
-    ~Functor() {}
-    Functor(int a, string n): arity(a),name(n) {}
+    Functor();
+    ~Functor();
+    Functor(int arity_, string name_);
 
-    bool operator==(const Functor &r) const {
-        return arity == r.arity && name == r.name;
-    }
-    bool operator!=(const Functor &r) const {
-        return arity != r.arity || name != r.name;
-    }
-    bool is_int() const {
-        return isdigit(name[0]);
-    }
-    bool operator<(const Functor &r) const {
-        return name != r.name ? name < r.name : arity < r.arity;
-    }
+    bool operator==(const Functor &rhs) const;
+    bool operator!=(const Functor &rhs) const;
+    bool is_int() const;
+    bool operator<(const Functor &rhs) const;
+    friend ostream& operator<<(ostream& ost, const Functor &rhs);
 
-    friend ostream& operator<<(ostream& ost, const Functor &r) {
-        ost << "<" << r.name << "," << r.arity << ">";
-        return ost;
-    }
 };
+
 
 class Link {
   public:
     Atom *atom;
     int pos;
 
-    Link() {}
-    ~Link() {}
-    Link(Atom *a, int p): atom(a), pos(p) {}
+    Link();
+    ~Link();
+    Link(Atom *atom_, int pos_);
 
-    bool operator<(const Link &r) const {
-        return atom != r.atom ? atom < r.atom : pos < r.pos;
-    }
+    bool operator<(const Link &rhs) const;
 };
 
 class Atom {
@@ -87,19 +74,11 @@ class Atom {
     vector<Link> link;
     list<Atom*>::iterator itr;
 
-    Atom() {}
-    ~Atom() {
-        assert(*itr == this);
-        atomlist[functor].erase(itr);
-    }
-    Atom(Functor f): functor(f) {
-        link.resize(functor.arity);
-        atomlist[functor].push_front(this);
-        itr = atomlist[functor].begin();
-    }
-    bool is_int() {
-        return functor.arity == 1 && isdigit(functor.name[0]);
-    }
+    Atom();
+    ~Atom();
+    Atom(Functor functor_);
+
+    bool is_int();
 };
 
 class RuleLink {
@@ -107,17 +86,13 @@ class RuleLink {
     RuleAtom *atom;
     int pos;
 
-    RuleLink() {}
-    ~RuleLink() {}
-    RuleLink(int p): atom(NULL), pos(p) {}
-    RuleLink(RuleAtom *a, int p): atom(a), pos(p) {}
-    bool is_freelink() {
-        return atom == NULL;
-    }
-    int freelinkID(){
-        assert(is_freelink());
-        return pos;
-    }
+    RuleLink();
+    ~RuleLink();
+    RuleLink(int pos_);
+    RuleLink(RuleAtom *atom_, int pos_);
+
+    bool is_freelink();
+    int freelinkID();
 };
 
 
@@ -127,15 +102,10 @@ class RuleAtom{
     int id;
     vector<RuleLink> link;
 
-    RuleAtom() {}
-    ~RuleAtom() {}
-    RuleAtom(Functor f, int i): functor(f), id(i) {
-        link.resize(functor.arity);
-    }
-
-    RuleAtom(Functor f, int i, vector<RuleLink> l):
-        functor(f), id(i), link(l) {}
-
+    RuleAtom();
+    ~RuleAtom();
+    RuleAtom(Functor functor_, int id_);
+    RuleAtom(Functor functor_, int id_, vector<RuleLink> link_);
 };
 
 
@@ -149,34 +119,32 @@ class Guard{
         string op;
         vector<string> right_exp;
         
-        Compare() {}
-        ~Compare() {}
-        Compare(vector<string> &left_exp_, string &op_, vector<string> &right_exp_):
-            left_exp(left_exp_), op(op_), right_exp(right_exp_) {}
-        bool is_null() {
-            return op == "";
-        }
+        Compare();
+        ~Compare();
+        Compare(vector<string> &left_exp_, string &op_, vector<string> &right_exp_);
+        
+        bool is_null();
     };
 
     class TypeCheck{
       public:
         string link;
         string type;
-        TypeCheck() {}
-        ~TypeCheck() {}
-        TypeCheck(string link_, string type_): link(link_), type(type_) {}
-        bool is_null() {
-            return type == "";
-        }
+
+        TypeCheck();
+        ~TypeCheck();
+        TypeCheck(string link_, string type_);
+
+        bool is_null();
     };
 
     vector<TypeCheck> type_check;
     vector<Compare> compare;
-    Guard() {}
-    ~Guard() {}
-    bool is_null() {
-        return type_check.empty() && compare.empty();
-    }
+
+    Guard();
+    ~Guard();
+
+    bool is_null();
 };
 
 
@@ -184,40 +152,14 @@ class Rule {
   public:
     int freelink_num;
     vector<RuleAtom*> head;
-    // vector<Guard> gurad;
     Guard guard;
     vector<RuleAtom*> body;
     vector<pair<int,int>> connector;
-    Rule(): freelink_num(0) {}
-    ~Rule() {}
 
-    void show() {
-        cout << "----------- head -----------" << endl;
-        for (int i = 0; i < (int)head.size(); i++) {
-            cout << head[i]->functor << " [" << head[i] << "] (";
-            int arity = (int)head[i]->functor.arity;
-            for (int j = 0; j < arity; j++) {
-                cout << ((head[i]->link[j].is_freelink()) ? "FL:" : "LL:")
-                     << head[i]->link[j].atom << "(" << head[i]->link[j].pos << ")"
-                     << (j + 1 == arity ? "" : ", ");
-            }
-            cout << ")" << endl;
-        }
-        cout << "----------- body -----------" << endl;
-        for (int i = 0; i < (int)body.size(); i++) {
-            cout << body[i]->functor << " [" << body[i] << "] (";
-            int arity = (int)body[i]->functor.arity;
-            for (int j = 0; j < arity; j++) {
-                cout << ((body[i]->link[j].is_freelink()) ? "FL:" : "LL:")
-                     << body[i]->link[j].atom << "(" << body[i]->link[j].pos << ")"
-                     << (j + 1 == arity ? "" : ", ");
-            }
-            cout << ")" << endl;
-        }
-        for (auto &p : connector) {
-            cout << p.first << " = " << p.second << endl;
-        }
-    }
+    Rule();
+    ~Rule();
+
+    void show();
 };
 
 
@@ -228,20 +170,28 @@ class Register {
     vector<Atom*> body;
     vector<Link> freelink;
 
-    Register() {}
-    ~Register() {}
-    Register(Rule &rule) {
-        head.resize(rule.head.size());
-        body.resize(rule.body.size());
-        freelink.resize(rule.freelink_num);
-    }
-
+    Register();
+    ~Register();
+    Register(Rule &rule);
 };
 
 
+bool try_rule(Rule &rule);
 bool find_atom(Rule &rule, Register &reg);
 bool set_atom_to_reg(Rule &rule, Register &reg, Atom* atom, int hi);
 void remove_atom_from_reg(Rule &rule, Register &reg, Atom* atom, int hi);
+int eval_exp(Rule &rule, Register &reg, vector<string> &tokens, int &i);
+int eval_factor(Rule &rule, Register &reg, vector<string> &tokens, int &i);
+int eval_term(Rule &rule, Register &reg, vector<string> &tokens, int &i);
+int eval_exp(Rule &rule, Register &reg, vector<string> &tokens, int &i);
+bool eval_compare(int left_exp, string &op, int right_exp);
+bool guard_check(Rule &rule, Register &reg);
 void rewrite(Rule &rule, Register &reg);
+
+void show_graph();
+void nest_dump(Atom* atom, int depth, unordered_set<Atom*> &dumped_atoms, map<Link, int> &locallink_id);
+void dump();
+void show_atomlist_size();
+void show_rules();
 
 #endif
