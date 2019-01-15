@@ -59,13 +59,16 @@ class TopSet{
     vector<string> atom_name;
     vector<vector<string>> atom_args;
     vector<pair<string,string>> connect;
-    map<string,vector<Link>> link_port;
+    map<string,string> dst;
 
     TopSet();
     ~TopSet();
 
     int add_atom(string atom);
     static string make_orig_local_link_num();
+    map<string,int> get_link_count();
+    void build_dst_map();
+    void check_link_num_of_graph();
     void show();
 };
 
@@ -93,11 +96,24 @@ class PrsGuard{
         TypeCheck();
         ~TypeCheck();
         TypeCheck(string link_, string type_);
+
+        bool is_null();
+    };
+
+    class Assign{
+      public:
+        string new_var;
+        vector<string> exp;
+
+        Assign();
+        ~Assign();
+
         bool is_null();
     };
 
     vector<TypeCheck> type_check;
     vector<Compare> compare;
+    vector<Assign> assign;
 
     PrsGuard();
     ~PrsGuard();
@@ -117,17 +133,40 @@ class PrsRule{
     PrsRule(TopSet head_, TopSet body_);
     PrsRule(TopSet head_, PrsGuard guard_, TopSet body_);
 
+    void check_link_num_of_rule();
+    void show();
 };
 
 
 class Parser{
   public:
+    int y,x;
+    vector<string> raw_inputs;
     TopSet graph;
     vector<PrsRule> rule;
 
     Parser();
     ~Parser();
 
+    void read_istream();
+    void syntax_error(string message);
+    void read_ignore();
+    bool read_token(string token);
+    void read_sentences();
+    TopSet read_topset();
+    Result_of_nest read_nest(TopSet &topset);
+
+    bool read_factor(vector<string> &tokens);
+    bool read_exp(vector<string> &tokens);
+    bool read_type_check(PrsGuard::TypeCheck &type_check);
+    bool read_assign(PrsGuard::Assign &assign);
+    bool read_compare(PrsGuard::Compare &compare);
+    bool read_guard(PrsGuard &guard);
+
+    string read_number();
+    string read_name();
+
+    void parse();
     void show();
 };
 
@@ -145,31 +184,12 @@ class Result_of_nest{
 };
 
 
-vector<string> read_istream();
-void syntax_error(vector<string> &raw_inputs, int &y, int &x, string message);
-void read_ignore(vector<string> &raw_inputs, int &y, int &x);
-bool read_token(vector<string> &raw_inputs, int &y, int &x, string token);
-Parser read_sentences(vector<string> &raw_inputs, int &y, int &x);
-TopSet read_topset(vector<string> &raw_inputs, int &y, int &x);
-Result_of_nest read_nest(vector<string> &raw_inputs, int &y, int &x, TopSet &topset);
-
-bool read_factor(vector<string> &raw_inputs, int &y, int &x, vector<string> &tokens);
-bool read_exp(vector<string> &raw_inputs, int &y, int &x, vector<string> &tokens);
-bool read_type_check(vector<string> &raw_inputs, int &y, int &x, PrsGuard::TypeCheck &type_check);
-bool read_compare(vector<string> &raw_inputs, int &y, int &x, PrsGuard::Compare &compare);
-bool read_guard(vector<string> &raw_inputs, int &y, int &x, PrsGuard &guard);
-
-string read_number(vector<string> &raw_inputs, int &y, int &x);
-string read_name(vector<string> &raw_inputs, int &y, int &x);
 bool is_link_initial(char c);
 bool is_atom_initial(char c);
 
-void build_link_port(TopSet &topset);
-void check_link_num_of_graph(TopSet &topset);
-void check_link_num_of_rule(int rule_id, PrsRule rule);
-TopSet::Link& follow_link(TopSet &topset, TopSet::Link &pre, string &link_name);
+// vm
 void set_graph(TopSet &graph);
 void set_rule(PrsRule &parser_rule);
-void parse();
+void load(Parser &parser);
 
 #endif

@@ -114,6 +114,11 @@ bool Guard::TypeCheck::is_null() {
 }
 
 
+Guard::Assign::Assign() {}
+
+Guard::Assign::~Assign() {}
+
+
 Guard::Guard() {}
 
 Guard::~Guard() {}
@@ -219,6 +224,7 @@ bool find_atom(Rule &rule, Register &reg) {
     問題があれば reg から外して false を返す
     再帰的に連結グラフのアトムを検査
 */
+
 bool set_atom_to_reg(Rule &rule, Register &reg, Atom* atom, int hi) {
 
     // 他でreg登録済みのアトム
@@ -351,6 +357,20 @@ int eval_factor(Rule &rule, Register &reg, vector<string> &tokens, int &i) {
         return - eval_factor(rule, reg, tokens, i);
     }
 
+    if (tokens[i] == "rand") {
+        i++;
+        assert(tokens[i] == "(");
+        i++;
+        int rand_max = std::stoi(tokens[i]);
+        assert(tokens[i] == ")");
+        i++;
+
+        static std::random_device seed_gen;
+        static std::mt19937 mt(seed_gen());
+        std::uniform_int_distribution<> rand_int(0, rand_max-1);
+        return rand_int(mt);
+    }
+
     assert(false);
 }
 
@@ -378,7 +398,7 @@ int eval_exp(Rule &rule, Register &reg, vector<string> &tokens, int &i) {
     while (true) {
         if ((int)tokens.size() == i) break;
         if (tokens[i] != "+" && tokens[i] != "-") break;
-        string op = tokens[i];
+        string &op = tokens[i];
         i++;
         int term = eval_term(rule, reg, tokens, i);
         if (op == "+") {
@@ -395,14 +415,18 @@ int eval_exp(Rule &rule, Register &reg, vector<string> &tokens, int &i) {
 bool eval_compare(int left_exp, string &op, int right_exp) {
     if (op == "=:=") return left_exp == right_exp;
     if (op == "=\\=") return left_exp != right_exp;
-    if (op == "<") return left_exp < right_exp;
     if (op == "=<") return left_exp <= right_exp;
-    if (op == ">") return left_exp > right_exp;
+    if (op == "<") return left_exp < right_exp;
     if (op == ">=") return left_exp >= right_exp;
+    if (op == ">") return left_exp > right_exp;
     assert(false);
 }
 
 bool guard_check(Rule &rule, Register &reg) {
+    // for (auto &assign : rule.guard.assign) {
+
+    // }
+
     for (auto &c : rule.guard.compare) {
         
         // TODO: リンクがすべてintであることを確認
@@ -562,7 +586,9 @@ void show_rules() {
 }
 
 int main(void) {
-    parse();
+    Parser parser;
+    parser.parse();
+    load(parser); // vm.load(parser);
     // show_rules();
     while (true) {
         bool success = false;

@@ -22,6 +22,7 @@ using std::list;
 #include <algorithm>
 using std::max;
 using std::min;
+#include <random>
 #include <cassert>
 
 #define debug(x) cerr << (#x) << ": " << (x) << endl;
@@ -96,7 +97,7 @@ class RuleLink {
 };
 
 
-class RuleAtom{
+class RuleAtom {
   public:
     Functor functor;
     int id;
@@ -109,10 +110,10 @@ class RuleAtom{
 };
 
 
-class Guard{
+class Guard {
   public:
 
-    class Compare{
+    class Compare {
       public:
 
         vector<string> left_exp;
@@ -126,7 +127,8 @@ class Guard{
         bool is_null();
     };
 
-    class TypeCheck{
+
+    class TypeCheck {
       public:
         string link;
         string type;
@@ -138,8 +140,20 @@ class Guard{
         bool is_null();
     };
 
+    class Assign {
+      public:
+        string new_var;
+        vector<string> exp;
+
+        Assign();
+        ~Assign();
+
+        bool is_null();
+    };
+
     vector<TypeCheck> type_check;
     vector<Compare> compare;
+    vector<Assign> assign;
 
     Guard();
     ~Guard();
@@ -161,7 +175,6 @@ class Rule {
 
     void show();
 };
-
 
 
 class Register {
