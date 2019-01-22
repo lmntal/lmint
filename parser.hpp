@@ -41,34 +41,20 @@ class PrsRule;
 
 class TopSet{
   public:
-    class Link{
-      public:
-        bool is_connector;
-        int id;
-        int pos;
-        Link();
-        ~Link();
-        Link(bool is_connector_, int id_, int pos_);
-
-        bool operator==(const Link rhs) const;
-        friend ostream& operator<<(ostream& ost, const Link &rhs);
-    };
-
-    static int orig_local_link_num;
-
-    vector<string> atom_name;
-    vector<vector<string>> atom_args;
-    vector<pair<string,string>> connect;
+    vector<string> atom_names;
+    vector<vector<string>> atoms_args;
+    vector<pair<string,string>> connects;
     map<string,string> dst;
+    map<string,int> link_count;
 
     TopSet();
     ~TopSet();
 
-    int add_atom(string atom);
-    static string make_orig_local_link_num();
-    map<string,int> get_link_count();
+    int add_atom(string atom_name);
+    static string get_uniq_local_link_name();
     void build_dst_map();
-    void check_link_num_of_graph();
+    void build_link_count();
+    void validate_links();
     void show();
 };
 
@@ -84,20 +70,15 @@ class PrsGuard{
 
         Compare();
         ~Compare();
-        Compare(vector<string> &left_exp_, string &op_, vector<string> &right_exp_);
-        bool is_null();
     };
 
     class TypeCheck{
       public:
-        string link;
         string type;
+        string link_name;
 
         TypeCheck();
         ~TypeCheck();
-        TypeCheck(string link_, string type_);
-
-        bool is_null();
     };
 
     class Assign{
@@ -107,18 +88,15 @@ class PrsGuard{
 
         Assign();
         ~Assign();
-
-        bool is_null();
     };
 
-    vector<TypeCheck> type_check;
-    vector<Compare> compare;
-    vector<Assign> assign;
+    vector<TypeCheck> type_checks;
+    vector<Compare> compares;
+    vector<Assign> assigns;
 
     PrsGuard();
     ~PrsGuard();
 
-    bool is_null();
     void show();
 };
 
@@ -127,13 +105,15 @@ class PrsRule{
   public:
     TopSet head, body;
     PrsGuard guard;
+    map<string, int> var_id;
 
     PrsRule();
     ~PrsRule();
     PrsRule(TopSet head_, TopSet body_);
     PrsRule(TopSet head_, PrsGuard guard_, TopSet body_);
 
-    void check_link_num_of_rule();
+    void build_var_id();
+    void validate_links();
     void show();
 };
 
@@ -143,7 +123,7 @@ class Parser{
     int y,x;
     vector<string> raw_inputs;
     TopSet graph;
-    vector<PrsRule> rule;
+    vector<PrsRule> rules;
 
     Parser();
     ~Parser();

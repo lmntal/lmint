@@ -151,9 +151,9 @@ class Guard {
         bool is_null();
     };
 
-    vector<TypeCheck> type_check;
-    vector<Compare> compare;
-    vector<Assign> assign;
+    vector<TypeCheck> type_checks;
+    vector<Compare> compares;
+    vector<Assign> assigns;
 
     Guard();
     ~Guard();
@@ -165,10 +165,10 @@ class Guard {
 class Rule {
   public:
     int freelink_num;
-    vector<RuleAtom*> head;
+    vector<RuleAtom*> head_atoms;
     Guard guard;
-    vector<RuleAtom*> body;
-    vector<pair<int,int>> connector;
+    vector<RuleAtom*> body_atoms;
+    vector<pair<int,int>> connectors;
 
     Rule();
     ~Rule();
@@ -179,9 +179,9 @@ class Rule {
 
 class Register {
   public:
-    vector<Atom*> head;
-    vector<Atom*> body;
-    vector<Link> freelink;
+    vector<Atom*> head_atoms;
+    vector<Atom*> body_atoms;
+    vector<Link> freelinks;
 
     Register();
     ~Register();
