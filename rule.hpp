@@ -191,8 +191,8 @@ class Register {
 
 bool try_rule(Rule &rule);
 bool find_atom(Rule &rule, Register &reg);
-bool set_atom_to_reg(Rule &rule, Register &reg, Atom* atom, int hi);
-void remove_atom_from_reg(Rule &rule, Register &reg, Atom* atom, int hi);
+bool set_atom_to_reg(Rule &rule, Register &reg, Atom* atom, int head_id);
+void remove_atom_from_reg(Rule &rule, Register &reg, Atom* atom, int head_id);
 int eval_exp(Rule &rule, Register &reg, vector<string> &tokens, int &i);
 int eval_factor(Rule &rule, Register &reg, vector<string> &tokens, int &i);
 int eval_term(Rule &rule, Register &reg, vector<string> &tokens, int &i);

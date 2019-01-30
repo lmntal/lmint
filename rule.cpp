@@ -188,29 +188,49 @@ void splice(list<Atom*> &a, list<Atom*>::iterator &itr) {
 
 bool find_atom(Rule &rule, Register &reg) {
     // 未決定アトムの中で最小のアトムリストのものを選ぶ
-    int min_atomlist_size = -1, hi = -1;
+    int head_id = -1;
+    list<Atom*> *start_point_list = NULL;
+
     for (int i = 0; i < (int)reg.head_atoms.size(); i++) {
         if (reg.head_atoms[i] != NULL) continue;
-        int atomlist_size = atomlist[rule.head_atoms[i]->functor].size();
-        if (min_atomlist_size > atomlist_size || hi == -1) {
-            min_atomlist_size = atomlist_size;
-            hi = i;
+
+        list<Atom*> *atomlist_i = &atomlist[rule.head_atoms[i]->functor];
+        if (start_point_list == NULL ||
+            start_point_list->size() > atomlist_i->size())
+        {
+            start_point_list = atomlist_i;
+            head_id = i;
         }
+
+        /*
+        int arity = rule.head_atoms[i]->functor.arity;
+        for (int j = 0; j < arity; j++) {
+            if (!rule.head_atoms[i]->link[j].is_freelink()) continue;
+            int fid = rule.head_atoms[i]->link[j].freelinkID();
+            if (reg.expected_unary.count(fid)) {
+                atomlist_i = retrieve(rule.head_atoms[i]->functor, j, reg.expected_unary[fid]);
+                if (start_point_list->size() > atomlist_i->size()) {
+                    start_point_list = atomlist_i;
+                    head_id = i;
+                }                
+            }
+        }
+        */
     }
-    if (hi == -1) {
+
+
+    if (start_point_list == NULL) {
         return guard_check(rule, reg);
     } else {
-        Functor functor = rule.head_atoms[hi]->functor;
-        auto itr_end = atomlist[functor].end();
-        for (auto itr = atomlist[functor].begin(); itr != itr_end; ++itr) {
+        for (auto itr = start_point_list->begin(); itr != start_point_list->end(); ++itr) {
             Atom* atom = *itr;
-            bool ok = set_atom_to_reg(rule, reg, atom, hi);
+            bool ok = set_atom_to_reg(rule, reg, atom, head_id);
             if (ok) {
                 if (find_atom(rule, reg)) {
-                    splice(atomlist[functor], itr);
+                    splice(*start_point_list, itr);
                     return true;
                 } else {
-                    remove_atom_from_reg(rule, reg, atom, hi);
+                    remove_atom_from_reg(rule, reg, atom, head_id);
                 }
             }
         }
@@ -220,21 +240,21 @@ bool find_atom(Rule &rule, Register &reg) {
 
 
 /*
-    reg.head_atoms[hi] に atom をいれて問題がないか検査
+    reg.head_atoms[head_id] に atom をいれて問題がないか検査
     問題がなければ reg にいれて true を返す
     問題があれば reg から外して false を返す
     再帰的に連結グラフのアトムを検査
 */
 
-bool set_atom_to_reg(Rule &rule, Register &reg, Atom* atom, int hi) {
+bool set_atom_to_reg(Rule &rule, Register &reg, Atom* atom, int head_id) {
 
     // 他でreg登録済みのアトム
     for (Atom *registered_atom : reg.head_atoms) {
         if (atom == registered_atom) return false;
     }
 
-    reg.head_atoms[hi] = atom;
-    RuleAtom *rule_atom = rule.head_atoms[hi];
+    reg.head_atoms[head_id] = atom;
+    RuleAtom *rule_atom = rule.head_atoms[head_id];
     /* リンクが合っているか */
     int arity = atom->functor.arity;
     for (int i = 0; i < arity; i++) {
@@ -246,14 +266,14 @@ bool set_atom_to_reg(Rule &rule, Register &reg, Atom* atom, int hi) {
 
         // リンク先のファンクタが違う
         if (dst_atom->functor != rule_atom->link[i].atom->functor) {
-            reg.head_atoms[hi] = NULL;
+            reg.head_atoms[head_id] = NULL;
             return false;
         }
         // 接続場所が合っているか
         int dst_pos = rule_atom->link[i].pos;
         if (dst_atom->link[dst_pos].atom != atom ||
             dst_atom->link[dst_pos].pos != i) {
-            reg.head_atoms[hi] = NULL;
+            reg.head_atoms[head_id] = NULL;
             return false;
         }
     }
@@ -271,14 +291,14 @@ bool set_atom_to_reg(Rule &rule, Register &reg, Atom* atom, int hi) {
         if (reg.head_atoms[dst_id] == NULL) {
             bool ok = set_atom_to_reg(rule, reg, dst_atom, dst_id);
             if (!ok) {
-                reg.head_atoms[hi] = NULL;
+                reg.head_atoms[head_id] = NULL;
                 return false;
             }
         }
         // 自由リンクでない かつ レジスタ[dst_id]は登録済み
         else if (reg.head_atoms[dst_id] != NULL) {
             if (reg.head_atoms[dst_id]->link[rule_atom->link[i].pos].atom != atom) {
-                reg.head_atoms[hi] = NULL;
+                reg.head_atoms[head_id] = NULL;
                 return false;
             }
         }
@@ -287,22 +307,22 @@ bool set_atom_to_reg(Rule &rule, Register &reg, Atom* atom, int hi) {
     return true;
 }
 
-void remove_atom_from_reg(Rule &rule, Register &reg, Atom* atom, int hi) {
+void remove_atom_from_reg(Rule &rule, Register &reg, Atom* atom, int head_id) {
     Functor functor = atom->functor;
-    reg.head_atoms[hi] = NULL;
+    reg.head_atoms[head_id] = NULL;
 
     int arity = functor.arity;
     for (int i = 0; i < arity; i++) {
 
         // 自由リンク
-        if (rule.head_atoms[hi]->link[i].is_freelink()) {
-            int fi = rule.head_atoms[hi]->link[i].freelinkID();
+        if (rule.head_atoms[head_id]->link[i].is_freelink()) {
+            int fi = rule.head_atoms[head_id]->link[i].freelinkID();
             reg.freelinks[fi] = Link(NULL, 0);
             continue;
         }
         
         Atom* dst_atom = atom->link[i].atom;
-        int dst_id = rule.head_atoms[hi]->link[i].atom->id;
+        int dst_id = rule.head_atoms[head_id]->link[i].atom->id;
         // 自由リンクでない かつ レジスタ登録済み
         if (reg.head_atoms[dst_id] != NULL) {
             remove_atom_from_reg(rule, reg, dst_atom, dst_id);
