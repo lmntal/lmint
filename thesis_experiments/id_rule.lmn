@@ -1,0 +1,8 @@
+order(ID, ProductID, CustomerID),
+product(ID1, Name1, Location1), customer(ID2, Name2, Location2)
+:-
+ProductID =:= ID1, CustomerID =:= ID2,
+int(Location1), int(Location2), int(ID)
+|
+order_location(Location1, Location2),
+product(ID1, Name1, Location1), customer(ID2, Name2, Location2).

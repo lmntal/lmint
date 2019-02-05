@@ -17,6 +17,8 @@ using std::map;
 using std::pair;
 #include <unordered_set>
 using std::unordered_set;
+#include <unordered_map>
+using std::unordered_map;
 #include <list>
 using std::list;
 #include <algorithm>
@@ -182,13 +184,14 @@ class Register {
     vector<Atom*> head_atoms;
     vector<Atom*> body_atoms;
     vector<Link> freelinks;
+    map<int,string> expected_unary;
 
     Register();
     ~Register();
     Register(Rule &rule);
 };
 
-
+void connect_links(Atom *atom1, int pos1, Atom *atom2, int pos2);
 bool try_rule(Rule &rule);
 bool find_atom(Rule &rule, Register &reg);
 bool set_atom_to_reg(Rule &rule, Register &reg, Atom* atom, int head_id);

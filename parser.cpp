@@ -701,7 +701,7 @@ void set_graph(TopSet &graph) {
         for (int j = 0; j < functor.arity; j++) {
             string str_pair = to_string(i) + ":" + to_string(j);
             pair<int,int> p = str_to_pair(graph.dst[str_pair]);
-            atoms[i]->link[j] = Link(atoms[p.first], p.second);
+            connect_links(atoms[i], j, atoms[p.first], p.second);
         }
     }
 }

@@ -3,6 +3,11 @@
 
 map<Functor,list<Atom*>> atomlist;
 vector<Rule> rulelist;
+map<Functor, map<int, unordered_map<string, list<Atom*>>>> unary_indexed_atomlist;
+// unary_indexed_atomlist[dst_functor][dst_pos][unary_name] = {*dst_atom, ...}
+
+unordered_map<Atom*, list<Atom*>::iterator> unary_indexed_atom_itr;
+// unary_indexed_atom_itr[*unary_atom] = unary_indexed_atomlist::iterator<*dst_atom>
 
 Functor::Functor() {}
 Functor::~Functor() {}
@@ -31,7 +36,7 @@ ostream& operator<<(ostream& ost, const Functor &rhs) {
 }
 
 
-Link::Link() {}
+Link::Link(): atom(NULL), pos(0) {}
 Link::~Link() {}
 
 Link::Link(Atom *atom_, int pos_): atom(atom_), pos(pos_) {}
@@ -57,6 +62,30 @@ Atom::Atom(Functor functor_): functor(functor_) {
 bool Atom::is_int() {
     return functor.arity == 1 && isdigit(functor.name[0]);
 }
+
+// atom1のpos1にatom2のpos2をつなぐ
+void connect_links(Atom *atom1, int pos1, Atom *atom2, int pos2) {
+    // atom1のpos1にあったLinkがunary
+    Atom *dst_atom = atom1->link[pos1].atom;
+    if (dst_atom != NULL && dst_atom->functor.arity == 1) {
+        unary_indexed_atomlist[atom1->functor][pos1][dst_atom->functor.name].erase(
+            unary_indexed_atom_itr[dst_atom]
+        );
+    }
+
+    // atom1のpos1にatom2のpos2をつなぐ
+    atom1->link[pos1].atom = atom2;
+    atom1->link[pos1].pos = pos2;
+
+    // atom2がunary
+    if (atom2->functor.arity == 1) {
+        unary_indexed_atomlist[atom1->functor][pos1][atom2->functor.name].emplace_front(atom1);
+        unary_indexed_atom_itr[atom2]
+            = unary_indexed_atomlist[atom1->functor][pos1][atom2->functor.name].begin();
+    }
+}
+
+
 
 
 RuleLink::RuleLink() {}
@@ -179,6 +208,14 @@ bool try_rule(Rule &rule) {
     それにマッチするアトムをグラフの中から1つ選びレジスタに格納する
 */
 
+list<Atom*>* get_unary_indexed_atomlist(
+    Functor &dst_functor, int dst_pos, string &unary_name)
+{
+    if (unary_indexed_atomlist[dst_functor][dst_pos].count(unary_name) == 0) {
+        return NULL;
+    }
+    return &unary_indexed_atomlist[dst_functor][dst_pos][unary_name];
+}
 
 //   [a_0, ... , a_k-1, a_k (itr), ... , a_n-1]
 // ->[a_k (itr), ... , a_n-1, a_0, ... , a_k-1]
@@ -186,10 +223,12 @@ void splice(list<Atom*> &a, list<Atom*>::iterator &itr) {
     a.splice(a.end(), a, a.begin(), itr);
 }
 
+
 bool find_atom(Rule &rule, Register &reg) {
     // 未決定アトムの中で最小のアトムリストのものを選ぶ
     int head_id = -1;
     list<Atom*> *start_point_list = NULL;
+    if (!guard_check(rule, reg)) return false;
 
     for (int i = 0; i < (int)reg.head_atoms.size(); i++) {
         if (reg.head_atoms[i] != NULL) continue;
@@ -202,25 +241,33 @@ bool find_atom(Rule &rule, Register &reg) {
             head_id = i;
         }
 
-        /*
         int arity = rule.head_atoms[i]->functor.arity;
         for (int j = 0; j < arity; j++) {
             if (!rule.head_atoms[i]->link[j].is_freelink()) continue;
             int fid = rule.head_atoms[i]->link[j].freelinkID();
             if (reg.expected_unary.count(fid)) {
-                atomlist_i = retrieve(rule.head_atoms[i]->functor, j, reg.expected_unary[fid]);
+                atomlist_i = get_unary_indexed_atomlist(rule.head_atoms[i]->functor, j, reg.expected_unary[fid]);
+                if (atomlist_i == NULL) return false;
                 if (start_point_list->size() > atomlist_i->size()) {
+                    printf("unary_indexed_atomlist is found!!\n");
+                    debug(fid);
+                    debug(reg.expected_unary[fid]);
+                    cout << reg.head_atoms[0]->functor << " --- " << reg.freelinks[0].atom->functor << endl;
+                    auto itr = atomlist_i->begin();
+                    Atom *begin_atom = *itr;
+                    debug(begin_atom->functor);
+                    debug(begin_atom->link[0].atom->functor);
+
                     start_point_list = atomlist_i;
                     head_id = i;
-                }                
+                }
             }
         }
-        */
     }
 
 
     if (start_point_list == NULL) {
-        return guard_check(rule, reg);
+        return true;
     } else {
         for (auto itr = start_point_list->begin(); itr != start_point_list->end(); ++itr) {
             Atom* atom = *itr;
@@ -436,6 +483,23 @@ bool eval_compare(int left_exp, string &op, int right_exp) {
     assert(false);
 }
 
+bool vars_in_exp_are_completed(Register &reg, vector<string> &tokens) {
+    for (string &token : tokens) {
+        if (token[0] == '#') {
+            int freelink_id = std::stoi(token.substr(1));
+            if (reg.freelinks[freelink_id].atom == NULL) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+
+
+// 本当はインクリメンタルにやるべき
+// そこまでで評価ができそうなGuard文の検査
+// expected_unary のチェックも行う
 bool guard_check(Rule &rule, Register &reg) {
     // for (auto &assign : rule.guard.assigns) {
 
@@ -443,14 +507,35 @@ bool guard_check(Rule &rule, Register &reg) {
 
     for (auto &compare : rule.guard.compares) {
         // TODO: リンクがすべてintであることを確認
-
-        int i = 0;
-        int left_exp = eval_exp(rule, reg, compare.left_exp, i);
-
-        i = 0;
-        int right_exp = eval_exp(rule, reg, compare.right_exp, i);
-
-        if (!eval_compare(left_exp, compare.op, right_exp)) {
+        bool left_exp_is_completed = vars_in_exp_are_completed(reg, compare.left_exp);
+        bool right_exp_is_completed = vars_in_exp_are_completed(reg, compare.right_exp);
+        if (!left_exp_is_completed && !right_exp_is_completed) {
+            continue;
+        }
+        int i, left_exp, right_exp;
+        if (left_exp_is_completed) {
+            i = 0;
+            left_exp = eval_exp(rule, reg, compare.left_exp, i);
+        }
+        if (right_exp_is_completed) {
+            i = 0;
+            right_exp = eval_exp(rule, reg, compare.right_exp, i);
+        }
+        if (left_exp_is_completed && !right_exp_is_completed &&
+            compare.right_exp.size() == 1 && compare.right_exp[0][0] == '#')
+        {
+            int freelink_id = std::stoi(compare.right_exp[0].substr(1));
+            reg.expected_unary[freelink_id] = to_string(left_exp);
+        }
+        if (!left_exp_is_completed && right_exp_is_completed &&
+            compare.left_exp.size() == 1 && compare.left_exp[0][0] == '#')
+        {
+            int freelink_id = std::stoi(compare.left_exp[0].substr(1));
+            reg.expected_unary[freelink_id] = to_string(right_exp);
+        }
+        if (left_exp_is_completed && right_exp_is_completed &&
+            !eval_compare(left_exp, compare.op, right_exp))
+        {
             return false;
         }
     }
@@ -482,9 +567,10 @@ void rewrite(Rule &rule, Register &reg) {
 
             if (rule.body_atoms[i]->link[j].is_freelink()) {
                 int fi = rule.body_atoms[i]->link[j].freelinkID();
-                int dst_pos = reg.freelinks[fi].pos;
-                reg.freelinks[fi].atom->link[dst_pos].atom = reg.body_atoms[i];
-                reg.freelinks[fi].atom->link[dst_pos].pos = j;
+                // int dst_pos = reg.freelinks[fi].pos;
+                // reg.freelinks[fi].atom->link[dst_pos].atom = reg.body_atoms[i];
+                // reg.freelinks[fi].atom->link[dst_pos].pos = j;
+                connect_links(reg.freelinks[fi].atom, reg.freelinks[fi].pos, reg.body_atoms[i], j);
             }
         }
     }
@@ -496,11 +582,13 @@ void rewrite(Rule &rule, Register &reg) {
             // bodyのi番目のアトムのj番目のリンクについて
             if (rule.body_atoms[i]->link[j].is_freelink()) {
                 int fi = rule.body_atoms[i]->link[j].freelinkID();
-                reg.body_atoms[i]->link[j] = reg.freelinks[fi];
+                // reg.body_atoms[i]->link[j] = reg.freelinks[fi];
+                connect_links(reg.body_atoms[i], j, reg.freelinks[fi].atom, reg.freelinks[fi].pos);
             } else {
                 int li = rule.body_atoms[i]->link[j].atom->id;
-                reg.body_atoms[i]->link[j].atom = reg.body_atoms[li];
-                reg.body_atoms[i]->link[j].pos = rule.body_atoms[i]->link[j].pos;
+                // reg.body_atoms[i]->link[j].atom = reg.body_atoms[li];
+                // reg.body_atoms[i]->link[j].pos = rule.body_atoms[i]->link[j].pos;
+                connect_links(reg.body_atoms[i], j, reg.body_atoms[li], rule.body_atoms[i]->link[j].pos);
             }
         }
     }
@@ -509,15 +597,31 @@ void rewrite(Rule &rule, Register &reg) {
     for (pair<int,int> &p : rule.connectors) {
         int u = p.first;
         int v = p.second;
-        reg.freelinks[u].atom->link[reg.freelinks[u].pos] = reg.freelinks[v];
-        reg.freelinks[v].atom->link[reg.freelinks[v].pos] = reg.freelinks[u];
+        // reg.freelinks[u].atom->link[reg.freelinks[u].pos] = reg.freelinks[v];
+        connect_links(reg.freelinks[u].atom, reg.freelinks[u].pos, reg.freelinks[v].atom, reg.freelinks[v].pos);
+        // reg.freelinks[v].atom->link[reg.freelinks[v].pos] = reg.freelinks[u];
+        connect_links(reg.freelinks[v].atom, reg.freelinks[v].pos, reg.freelinks[u].atom, reg.freelinks[u].pos);
     }
 
     // 5. headatomを消す
     for (auto &atom : reg.head_atoms) {
+        if (atom->functor.arity == 1) {
+            printf("Debug at %s : %d\n",__func__,__LINE__);
+            debug(atom->link[0].atom->functor);
+            debug(atom->link[0].pos);
+            debug(atom->functor.name);
+            debug(*(unary_indexed_atom_itr[atom]));
+            debug(atom->link[0].atom->link[0].atom->functor);
+            debug(unary_indexed_atomlist[atom->link[0].atom->functor][atom->link[0].pos][atom->functor.name].size());
+            debug(*(unary_indexed_atomlist[atom->link[0].atom->functor][atom->link[0].pos][atom->functor.name].begin()));
+            debug(*unary_indexed_atom_itr[atom]);
+            unary_indexed_atomlist[atom->link[0].atom->functor][atom->link[0].pos][atom->functor.name].erase(
+                unary_indexed_atom_itr[atom]
+            );
+            printf("Debug at %s : %d\n",__func__,__LINE__);
+        }
         delete atom;
     }
-
 }
 
 /* ----------------------------- dump ----------------------------- */
@@ -603,6 +707,26 @@ int main(void) {
     parser.parse();
     load(parser); // vm.load(parser);
     // show_rules();
+    /*
+    {
+        // unary_indexed_atomlist[dst_functor][dst_pos][unary_name] = {*dst_atom, ...}
+        // map<Functor, map<int, unordered_map<string, list<Atom*>>>> unary_indexed_atomlist;
+        for (auto &functor2map : unary_indexed_atomlist) {
+            cout << functor2map.first << endl;
+            for (auto &itr : functor2map.second) {
+                auto &um = itr.second;
+                for (auto &str2list : um) {
+                    cout << "key = " << str2list.first << endl;
+                    for (Atom *a : str2list.second) {
+                        assert(a->link[itr.first].atom->functor.name == str2list.first);
+                    }
+                }
+            }
+        }
+
+        
+    }
+    */
     while (true) {
         bool success = false;
         for (Rule &rule : rulelist) {

@@ -1,10 +1,14 @@
 # TODO
 
 ## 実装
-```
-unordered_map<Atom*, int> と stringをstoi変換するの とで性能の差を測る
-```
-- Guard を Enum で実装
+
+`unordered_map<Atom*, int>` と `stringをstoi変換するの` とで性能の差を測る
+
+
+- class VM に諸々を入れる
+
+
+### Guard を Enum で実装
 -- read_expを実装
 -- eval_expを実装 
 -- 代入使わない例で検証
@@ -82,16 +86,150 @@ vectorと違ってeraseができる
 
 - 代入を実装する
     - Registerへのストア
-    - 変数の依存関係がDAGであるか検査(Parse時)
+    - 変数の依存関係がDAGであるか検査(Parse時)(後回し)
 
-- unary index の設計を錬る
-    - class UnaryIndex
-    - 全てのAtomのリンク接続時にunaryかどうか見て、そうであればindexingする
+
+### UnaryIndex
+
+- 変にunordered_mapでhashをしたりmapで赤黒木を操作するよりは単純なforループの方が軽いことさえあることを念頭に置き、定数倍高速化は後でも構わないことを覚えておこう
+
+```
+class UnaryIndex{
+    map<Functor, map<int, unordered_map<string, list<Atom*>>>>
+    
+    list<Atom*> &retrievekey(Functor &dst_functor, int dst_pos, string &unary_name) {
+
+    }
+    
+}
+```
+
+#### 挿入・削除
+
+- relink時にunaryかどうか見て、そうであればindexingする
+- これに保存しておけば、unaryが消えるもしくはrelinkが行われる時に消せばいい
+
+```
+unordered_map<Atom*, list::iterator<Atom*>> unary_indexing_itr;
+             ↑unary atom
+
+Atom::Atom(Functor functor_): functor(functor_) {
+    link.resize(functor.arity);
+    atomlist[functor].push_front(this);
+    maneged_iterators[this].push_back(atomlist[functor].begin());
+}
+
+Atom::~Atom() {
+    maneged_iterators.erase(this);
+}
+
+void connect_links(Atom *atom1, int pos1, Atom *atom2, int pos2) {
+    if (atom1->functor.arity == 1) {
+        // atom2がunary
+
+    }
+    if (atom2->functor.arity == 1) {
+        // atom1がunary
+        
+    }
+}
+```
+
+
+```
+a(X),b(Y,Z)  :- X=:=Z, X=:=Y | 
+```
+
+b(Y,Z) 決定
+
+Yに対してa(X)をretrieve可能
+Zに対してa(X)をretrieve可能
+
+この場合、 Z=:=Yをつけると、高速化できるがそれはユーザーに任せることとする
+
+左辺・右辺それぞれのeval結果を保持
+retrieve可能な変数(条件式の片側の辺の式が Link =:= Exp もしくは Exp =:= Link であり、かつHeadの自由リンク)の逆側の辺(Exp)がeval済みなとき、retrieveをする。
+
+Ruleは [ retrieve可能な変数(X) (var_id) -> eval済み対辺(Y)(Z) (compare_id, LHS or RHS) のタプル ] のマッピング (複数)(vector?) をもつ 対辺
+
+find_atom時に
+- retrieve可能な変数(X) (var_id) が未決定
+- a(X)のaが未決定
+- 対辺(Y)(Z)がeval済み
+
+
+follow(A1, B1) 
+A1: NULL or 
+
+
+
+
+```
+query(A,B), follow(A1,C1), follow(C2,B2) :-
+    A =:= A1, B =:= B2, C1 =:= C2, uniq(A,B,C1) |
+    query(A,B), follow(A1,C1), follow(C2,B2), common(A,B,C1).
+``` 
+
+`head_atoms_id` -> {`(unary_pos, value, functor)`, ... } -> 
+`follow(A1,B1)` には `follow(var[A1],*)` のUI と `follow(*,var[B1])` のUI がある -> この「ある」はロード時にやる？
+つまり `UI(follow/2, 0, var[A1])` と `UI(follow/2, 1, var[B1])` のlistがある
+
+
+
+辺
+
+```
+map<int, int> expected_value;
+expected_value[`A1`]
+```
+対辺が満たされたら登録
+
+expected_value[`B1`]
+
+expected_valueを外すタイミングは、入れるタイミングのところでバックトラックに任せるだけ
+
+
+? 「eval済み -> evalまだ」と「evalまだ -> eval」のタイミングをどうするか
+
+e
+
+
+Atom* はdst側のAtom
+もしこのアトムが
+
+* 管理の仕方
+    * 追加？
+    * 削除
+    * iterator
+
+```
+list<Atom*> *candidates;
+```
+
+```
+unordered_map<Atom*, bool> deleted_atoms;
+のような管理はできません。
+なぜなら、消したアトムのアドレスは、解放してから新たに使われる可能性があるからです。
+（そのために解放している）
+よって、固有なIDでも振らないとだめです→もうそれ、vectorに詰めてもよくない？ 
+```
+
+```
+シンボルアトム側で管理はしない。面倒なので。
+X = a(Y) :- X = Y.
+でXとYそれぞれ再度索引付けが必要となる
+例えば、a(N0,N1,N2)とあって、N1が自由リンクの繋ぎ変えで変わったとする。
+すると
+```
+
+
+
+
 
 - 片方の辺が決まって、かつもう片方が自由リンクならばUnaryIndexを使う
 
 
-- class VM に諸々を入れる
+
 
 ## 命名
 - TopSet ->
