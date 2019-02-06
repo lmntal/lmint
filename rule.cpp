@@ -249,15 +249,20 @@ bool find_atom(Rule &rule, Register &reg) {
                 atomlist_i = get_unary_indexed_atomlist(rule.head_atoms[i]->functor, j, reg.expected_unary[fid]);
                 if (atomlist_i == NULL) return false;
                 if (start_point_list->size() > atomlist_i->size()) {
-                    printf("unary_indexed_atomlist is found!!\n");
-                    debug(fid);
-                    debug(reg.expected_unary[fid]);
-                    cout << reg.head_atoms[0]->functor << " --- " << reg.freelinks[0].atom->functor << endl;
-                    auto itr = atomlist_i->begin();
-                    Atom *begin_atom = *itr;
-                    debug(begin_atom->functor);
-                    debug(begin_atom->link[0].atom->functor);
-
+                    if (atomlist_i->size() > 0) {
+                        printf("--- unary_indexed_atomlist is found!! ---\n");
+                        debug(fid);
+                        debug(reg.expected_unary[fid]);
+                        debug(reg.head_atoms[0]);
+                        debug(reg.freelinks[0].atom->functor);
+                        cout << reg.head_atoms[0]->functor << " --- " << reg.freelinks[0].atom->functor << endl;
+                        auto itr = atomlist_i->begin();
+                        Atom *begin_atom = *itr;
+                        debug(begin_atom->functor);
+                        debug(begin_atom->link.size());
+                        debug(begin_atom->link[0].atom);
+                        debug(begin_atom->link[0].atom->functor);
+                    }
                     start_point_list = atomlist_i;
                     head_id = i;
                 }
@@ -603,25 +608,42 @@ void rewrite(Rule &rule, Register &reg) {
         connect_links(reg.freelinks[v].atom, reg.freelinks[v].pos, reg.freelinks[u].atom, reg.freelinks[u].pos);
     }
 
+
     // 5. headatomを消す
-    for (auto &atom : reg.head_atoms) {
-        if (atom->functor.arity == 1) {
-            printf("Debug at %s : %d\n",__func__,__LINE__);
-            debug(atom->link[0].atom->functor);
-            debug(atom->link[0].pos);
-            debug(atom->functor.name);
-            debug(*(unary_indexed_atom_itr[atom]));
-            debug(atom->link[0].atom->link[0].atom->functor);
-            debug(unary_indexed_atomlist[atom->link[0].atom->functor][atom->link[0].pos][atom->functor.name].size());
-            debug(*(unary_indexed_atomlist[atom->link[0].atom->functor][atom->link[0].pos][atom->functor.name].begin()));
-            debug(*unary_indexed_atom_itr[atom]);
-            unary_indexed_atomlist[atom->link[0].atom->functor][atom->link[0].pos][atom->functor.name].erase(
-                unary_indexed_atom_itr[atom]
+    const int rule_head_size = rule.head_atoms.size();
+    for (int i = 0; i < rule_head_size; i++) {
+        if (reg.head_atoms[i]->functor.arity == 1 && !rule.head_atoms[i]->link[0].is_freelink()) {
+            int dst_id = rule.head_atoms[i]->link[0].atom->id;
+            int dst_pos = rule.head_atoms[i]->link[0].pos;
+            unary_indexed_atomlist[rule.head_atoms[dst_id]->functor][dst_pos][rule.head_atoms[i]->functor.name].erase(
+                unary_indexed_atom_itr[reg.head_atoms[i]]
             );
-            printf("Debug at %s : %d\n",__func__,__LINE__);
         }
-        delete atom;
+        // delete reg.head_atoms[i];
+        // reg.head_atoms[i]->~Atom();
+        atomlist[reg.head_atoms[i]->functor].erase(reg.head_atoms[i]->itr);
     }
+    
+    // for (auto &atom : reg.head_atoms) {
+    //     if (atom->functor.arity == 1) {
+    //         printf("Debug at %s : %d\n",__func__,__LINE__);
+
+    //         debug(atom->link[0].atom->functor);
+    //         debug(atom->link[0].pos);
+    //         debug(atom->functor.name);
+    //         debug(*(unary_indexed_atom_itr[atom]));
+    //         debug(atom->link[0].atom->link[0].atom->functor);
+    //         debug(unary_indexed_atomlist[atom->link[0].atom->functor][atom->link[0].pos][atom->functor.name].size());
+    //         debug(*(unary_indexed_atomlist[atom->link[0].atom->functor][atom->link[0].pos][atom->functor.name].begin()));
+    //         debug(*unary_indexed_atom_itr[atom]);
+
+    //         unary_indexed_atomlist[atom->link[0].atom->functor][atom->link[0].pos][atom->functor.name].erase(
+    //             unary_indexed_atom_itr[atom]
+    //         );
+    //         printf("Debug at %s : %d\n",__func__,__LINE__);
+    //     }
+    //     delete atom;
+    // }
 }
 
 /* ----------------------------- dump ----------------------------- */
