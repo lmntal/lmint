@@ -250,18 +250,18 @@ bool find_atom(Rule &rule, Register &reg) {
                 if (atomlist_i == NULL) return false;
                 if (start_point_list->size() > atomlist_i->size()) {
                     if (atomlist_i->size() > 0) {
-                        printf("--- unary_indexed_atomlist is found!! ---\n");
-                        debug(fid);
-                        debug(reg.expected_unary[fid]);
-                        debug(reg.head_atoms[0]);
-                        debug(reg.freelinks[0].atom->functor);
-                        cout << reg.head_atoms[0]->functor << " --- " << reg.freelinks[0].atom->functor << endl;
-                        auto itr = atomlist_i->begin();
-                        Atom *begin_atom = *itr;
-                        debug(begin_atom->functor);
-                        debug(begin_atom->link.size());
-                        debug(begin_atom->link[0].atom);
-                        debug(begin_atom->link[0].atom->functor);
+                        // printf("--- unary_indexed_atomlist is found!! ---\n");
+                        // debug(fid);
+                        // debug(reg.expected_unary[fid]);
+                        // debug(reg.head_atoms[0]);
+                        // debug(reg.freelinks[0].atom->functor);
+                        // cout << reg.head_atoms[0]->functor << " --- " << reg.freelinks[0].atom->functor << endl;
+                        // auto itr = atomlist_i->begin();
+                        // Atom *begin_atom = *itr;
+                        // debug(begin_atom->functor);
+                        // debug(begin_atom->link.size());
+                        // debug(begin_atom->link[0].atom);
+                        // debug(begin_atom->link[0].atom->functor);
                     }
                     start_point_list = atomlist_i;
                     head_id = i;
@@ -557,6 +557,24 @@ void rewrite(Rule &rule, Register &reg) {
     そのfreelinkを新しいほうにつなぎ変えてからもとのhead_atomsを消す必要がある
 */
 
+    vector<bool> in_guard(rule.freelink_num);
+    for (auto &compare : rule.guard.compares) {
+        for (string &token : compare.left_exp) {
+            if (token[0] == '#') {
+                int freelink_id = std::stoi(token.substr(1));
+                in_guard[freelink_id] = true;
+            }
+        }
+        for (string &token : compare.right_exp) {
+            if (token[0] == '#') {
+                int freelink_id = std::stoi(token.substr(1));
+                in_guard[freelink_id] = true;
+            }
+        }
+    }
+    map<pair<int,int>, Atom*> typed_atoms; // <body_atoms_id, freelink_id>
+
+
     const int rule_body_size = rule.body_atoms.size();
 
     // 1. 新しいアトムを生成する
@@ -572,10 +590,15 @@ void rewrite(Rule &rule, Register &reg) {
 
             if (rule.body_atoms[i]->link[j].is_freelink()) {
                 int fi = rule.body_atoms[i]->link[j].freelinkID();
-                // int dst_pos = reg.freelinks[fi].pos;
-                // reg.freelinks[fi].atom->link[dst_pos].atom = reg.body_atoms[i];
-                // reg.freelinks[fi].atom->link[dst_pos].pos = j;
-                connect_links(reg.freelinks[fi].atom, reg.freelinks[fi].pos, reg.body_atoms[i], j);
+                if (in_guard[fi]) {
+                    typed_atoms[{i, fi}] = new Atom(reg.freelinks[fi].atom->functor);
+                    connect_links(typed_atoms[{i, fi}], 0, reg.body_atoms[i], j);
+                } else {
+                    // int dst_pos = reg.freelinks[fi].pos;
+                    // reg.freelinks[fi].atom->link[dst_pos].atom = reg.body_atoms[i];
+                    // reg.freelinks[fi].atom->link[dst_pos].pos = j;
+                    connect_links(reg.freelinks[fi].atom, reg.freelinks[fi].pos, reg.body_atoms[i], j);
+                }
             }
         }
     }
@@ -587,8 +610,12 @@ void rewrite(Rule &rule, Register &reg) {
             // bodyのi番目のアトムのj番目のリンクについて
             if (rule.body_atoms[i]->link[j].is_freelink()) {
                 int fi = rule.body_atoms[i]->link[j].freelinkID();
+                if (in_guard[fi]) {
+                    connect_links(reg.body_atoms[i], j, typed_atoms[{i, fi}], 0);
+                } else {
+                    connect_links(reg.body_atoms[i], j, reg.freelinks[fi].atom, reg.freelinks[fi].pos);
+                }
                 // reg.body_atoms[i]->link[j] = reg.freelinks[fi];
-                connect_links(reg.body_atoms[i], j, reg.freelinks[fi].atom, reg.freelinks[fi].pos);
             } else {
                 int li = rule.body_atoms[i]->link[j].atom->id;
                 // reg.body_atoms[i]->link[j].atom = reg.body_atoms[li];
@@ -608,21 +635,33 @@ void rewrite(Rule &rule, Register &reg) {
         connect_links(reg.freelinks[v].atom, reg.freelinks[v].pos, reg.freelinks[u].atom, reg.freelinks[u].pos);
     }
 
+    for (int i = 0; i < rule.freelink_num; i++) {
+        if (in_guard[i]) {
+            Atom *dst_unary_atom = reg.freelinks[i].atom;
+            Atom *h_atom = dst_unary_atom->link[0].atom;
+            unary_indexed_atomlist[h_atom->functor][dst_unary_atom->link[0].pos][dst_unary_atom->functor.name].erase(
+                unary_indexed_atom_itr[dst_unary_atom]
+            );
+            delete dst_unary_atom;
+        }
+    }
 
     // 5. headatomを消す
     const int rule_head_size = rule.head_atoms.size();
     for (int i = 0; i < rule_head_size; i++) {
         if (reg.head_atoms[i]->functor.arity == 1 && !rule.head_atoms[i]->link[0].is_freelink()) {
+            printf("Debug at %s : %d\n",__func__,__LINE__);
             int dst_id = rule.head_atoms[i]->link[0].atom->id;
             int dst_pos = rule.head_atoms[i]->link[0].pos;
             unary_indexed_atomlist[rule.head_atoms[dst_id]->functor][dst_pos][rule.head_atoms[i]->functor.name].erase(
                 unary_indexed_atom_itr[reg.head_atoms[i]]
             );
         }
-        // delete reg.head_atoms[i];
+        delete reg.head_atoms[i];
         // reg.head_atoms[i]->~Atom();
-        atomlist[reg.head_atoms[i]->functor].erase(reg.head_atoms[i]->itr);
+        // atomlist[reg.head_atoms[i]->functor].erase(reg.head_atoms[i]->itr);
     }
+
     
     // for (auto &atom : reg.head_atoms) {
     //     if (atom->functor.arity == 1) {
@@ -727,8 +766,10 @@ void show_rules() {
 int main(void) {
     Parser parser;
     parser.parse();
-    load(parser); // vm.load(parser);
+    load(parser);
+    // vm.load(parser);
     // show_rules();
+
     /*
     {
         // unary_indexed_atomlist[dst_functor][dst_pos][unary_name] = {*dst_atom, ...}
@@ -749,6 +790,7 @@ int main(void) {
         
     }
     */
+
     while (true) {
         bool success = false;
         for (Rule &rule : rulelist) {
