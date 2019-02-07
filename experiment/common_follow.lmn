@@ -1,0 +1,6 @@
+common(3,13,nil).
+common(17,7,nil).
+
+common(A,B,L), follow(A1,C1), follow(B2,C2) :- 
+    A =:= A1, B =:= B2, C1 =:= C2 |
+    common(A,B,X), c(C1,L,X).

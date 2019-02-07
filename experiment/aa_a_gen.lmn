@@ -1,7 +1,0 @@
-front(tail(PARAMETER)).
-
-Ret = tail(N)
-:- N>0, N1 = N-1
-| Ret = a(tail(N1)).
-
-Ret = tail(0) :- Ret = tail.
