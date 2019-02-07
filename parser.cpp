@@ -741,7 +741,20 @@ void set_rule(PrsRule &parser_rule) {
         }
     }
 
-    // Guardの処理
+    // in_guardを調べる
+    map<string, bool> in_guard;
+    for (auto &compare : parser_rule.guard.compares) {
+        for (string &token : compare.left_exp) {
+            if (parser_rule.var_id.count(token)) {
+                in_guard[token] = true;
+            }
+        }
+        for (string &token : compare.right_exp) {
+            if (parser_rule.var_id.count(token)) {
+                in_guard[token] = true;
+            }
+        }
+    }
 
     for (int i = 0; i < body_atom_num; i++) {
         Functor functor = body_atoms[i]->functor;
@@ -754,6 +767,10 @@ void set_rule(PrsRule &parser_rule) {
             if (is_link_initial(dst_name[0])) {
                 body_atoms[i]->link[j] = RuleLink(parser_rule.var_id[dst_name]);
             }
+            // Guardにある型付きのリンク // 直したい
+            else if (in_guard[parser_rule.body.atoms_args[i][j]]) {
+                body_atoms[i]->link[j] = RuleLink(parser_rule.var_id[parser_rule.body.atoms_args[i][j]]);
+            }
             // 局所リンク
             else {
                 pair<int,int> p = str_to_pair(parser_rule.body.dst[str_pair]);
@@ -761,6 +778,7 @@ void set_rule(PrsRule &parser_rule) {
             }
         }
     }
+
 
     // connector
     map<string, bool> registered_connector;
