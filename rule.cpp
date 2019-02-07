@@ -514,13 +514,13 @@ bool guard_check(Rule &rule, Register &reg) {
             i = 0;
             right_exp = eval_exp(rule, reg, compare.right_exp, i);
         }
-        if (left_exp_is_completed && !right_exp_is_completed &&
+        if (left_exp_is_completed && !right_exp_is_completed && compare.op == "=:=" &&
             compare.right_exp.size() == 1 && compare.right_exp[0][0] == '#')
         {
             int freelink_id = std::stoi(compare.right_exp[0].substr(1));
             reg.expected_unary[freelink_id] = to_string(left_exp);
         }
-        if (!left_exp_is_completed && right_exp_is_completed &&
+        if (!left_exp_is_completed && right_exp_is_completed && compare.op == "=:=" &&
             compare.left_exp.size() == 1 && compare.left_exp[0][0] == '#')
         {
             int freelink_id = std::stoi(compare.left_exp[0].substr(1));
